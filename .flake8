@@ -1,0 +1,4 @@
+[flake8]
+
+ignore=ANN101,ANN102
+suppress_none_returning=True
