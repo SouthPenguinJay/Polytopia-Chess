@@ -51,6 +51,24 @@ class Conclusion(enum.Enum):
     AGREED_DRAW = enum.auto()
 
 
+class PieceType(enum.Enum):
+    """An enum for a chess piece type."""
+
+    PAWN = enum.auto()
+    ROOK = enum.auto()
+    KNIGHT = enum.auto()
+    BISHOP = enum.auto()
+    QUEEN = enum.auto()
+    KING = enum.auto()
+
+
+class Side(enum.Enum):
+    """An enum for home/away."""
+
+    HOME = enum.auto()
+    AWAY = enum.auto()
+
+
 class EnumField(pw.SmallIntegerField):
     """A field where each value is an integer representing an option."""
 
@@ -120,6 +138,7 @@ class Game(BaseModel):
 
     host = pw.ForeignKeyField(model=User, backref='games')
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
+    current_turn = EnumField(Side, default=Side.HOME)
     mode = pw.SmallIntegerField(default=1)    # only valid value for now
     seconds_per_game = pw.IntegerField()      # timer at the start of the game
     seconds_per_turn = pw.IntegerField()      # timer incremement per turn
@@ -127,7 +146,6 @@ class Game(BaseModel):
     away_time = pw.IntegerField()             # timer for away
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
-    # TODO: Represent the board somehow.
     winner = EnumField(Winner, default=Winner.GAME_NOT_COMPLETE)
     conclusion_type = EnumField(
         Conclusion, default=Conclusion.GAME_NOT_COMPLETE
@@ -137,4 +155,15 @@ class Game(BaseModel):
     ended_at = pw.DateTimeField(null=True)
 
 
-db.create_tables([User, Game])
+class Piece(pw.BaseModel):
+    """A model to represent a piece in a game."""
+
+    piece_type = EnumField(PieceType)
+    file = pw.SmallIntegerField()
+    rank = pw.SmallIntegerField()
+    side = EnumField(Side)
+    has_moved = pw.BooleanField(default=False)
+    game = pw.ForeignKeyField(model=Game, backref='pieces')
+
+
+db.create_tables([User, Game, Piece])
