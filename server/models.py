@@ -114,7 +114,7 @@ class BaseModel(pw.Model):
         database = db
         use_legacy_table_names = False
 
-    def __str__(self) -> str:
+    def __str__(self, indent: int = 1) -> str:
         """Represent the model as a string."""
         values = {}
         for field in type(self)._meta.sorted_field_names:
@@ -123,12 +123,20 @@ class BaseModel(pw.Model):
         for field in values:
             if isinstance(values[field], datetime.datetime):
                 value = f"'{values[field]}'"
+            elif isinstance(values[field], pw.Model):
+                value = values[field].__str__(indent=indent + 1)
+            elif isinstance(values[field], enum.Enum):
+                value = values[field].name
             else:
                 value = repr(values[field])
-            if len(value) > 20:
-                value = value[:12] + '...' + value[-5:]
             main.append(f'{field}={value}')
-        return f'<{type(self).__name__} ' + ' '.join(main) + '>'
+        end_indent = '    ' * (indent - 1)
+        indent = '\n' + '    ' * indent
+        return (
+            f'<{type(self).__name__}{indent}'
+            + indent.join(main)
+            + f'\n{end_indent}>'
+        )
 
 
 class User(BaseModel):
@@ -174,8 +182,8 @@ class Game(BaseModel):
     time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
 
     # timers at the start of the current turn, null means starting_time
-    _home_time = pw_postgres.IntervalField(null=True, field_name='home_time')
-    _away_time = pw_postgres.IntervalField(null=True, field_name='away_time')
+    _home_time = pw_postgres.IntervalField(null=True, column_name='home_time')
+    _away_time = pw_postgres.IntervalField(null=True, column_name='away_time')
 
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
