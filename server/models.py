@@ -7,6 +7,7 @@ import typing
 import config
 
 import peewee as pw
+
 import playhouse.postgres_ext as pw_postgres
 
 
@@ -24,7 +25,7 @@ class Password:
         """Store the password."""
         self.password = password
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Hash the password."""
         return HASHING_ALGORITHM(self.password.encode()).hexdigest()
 
@@ -171,8 +172,11 @@ class Game(BaseModel):
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
     starting_time = pw_postgres.IntervalField()    # initial timer value
     time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
-    home_time = pw_postgres.IntervalField()        # timer for home
-    away_time = pw_postgres.IntervalField()        # timer for away
+
+    # timers at the start of the current turn, null means starting_time
+    _home_time = pw_postgres.IntervalField(null=True, field_name='home_time')
+    _away_time = pw_postgres.IntervalField(null=True, field_name='away_time')
+
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
     winner = EnumField(Winner, default=Winner.GAME_NOT_COMPLETE)
@@ -180,8 +184,29 @@ class Game(BaseModel):
         Conclusion, default=Conclusion.GAME_NOT_COMPLETE
     )
     opened_at = pw.DateTimeField(default=datetime.datetime.now)
+    last_turn = pw.DateTimeField(null=True)
     started_at = pw.DateTimeField(null=True)
     ended_at = pw.DateTimeField(null=True)
+
+    @property
+    def home_time(self) -> datetime.timedelta:
+        """Get the timer for the home side."""
+        return self._home_time or self.timer_per_turn
+
+    @home_time.setter
+    def home_time(self, new: datetime.timedelta):
+        """Set the timer for the home side."""
+        self._home_time = new
+
+    @property
+    def away_time(self) -> datetime.timedelta:
+        """Get the timer for the away side."""
+        return self._away_time or self.timer_per_turn
+
+    @away_time.setter
+    def away_time(self, new: datetime.timedelta):
+        """Set the timer for the away side."""
+        self._away_time = new
 
 
 class Piece(BaseModel):
