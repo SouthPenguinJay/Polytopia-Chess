@@ -177,6 +177,7 @@ class Game(BaseModel):
     host = pw.ForeignKeyField(model=User, backref='games')
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
+    turn_number = pw.SmallIntegerField(default=1)
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
     starting_time = pw_postgres.IntervalField()    # initial timer value
     time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
@@ -215,6 +216,13 @@ class Game(BaseModel):
     def away_time(self, new: datetime.timedelta):
         """Set the timer for the away side."""
         self._away_time = new
+
+    def start_game(self, away: User):
+        """Start a game which had no away side."""
+        self.away = away
+        self.started_at = datetime.datetime.now()
+        self.last_turn = datetime.datetime.now()
+        self.save()
 
 
 class Piece(BaseModel):
