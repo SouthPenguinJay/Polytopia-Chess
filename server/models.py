@@ -155,7 +155,7 @@ class Game(BaseModel):
     ended_at = pw.DateTimeField(null=True)
 
 
-class Piece(pw.BaseModel):
+class Piece(BaseModel):
     """A model to represent a piece in a game."""
 
     piece_type = EnumField(PieceType)
