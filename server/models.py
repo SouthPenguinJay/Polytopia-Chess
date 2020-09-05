@@ -1,4 +1,6 @@
 """Various Peewee models."""
+from __future__ import annotations
+
 import datetime
 import enum
 import hashlib
@@ -43,6 +45,33 @@ class HashedPassword:
         return hashed_attempt == self.hashed_password
 
 
+class TurnCounter:
+    """A counter for the turn of a game."""
+
+    def __init__(self, game: Game):
+        """Store game."""
+        self.game = game
+
+    def __int__(self) -> int:
+        """Get the turn number."""
+        # _turn_number is internal, but this is the class that changes it
+        return self.game._turn_number
+
+    def __str__(self) -> str:
+        """Get the turn number as a string."""
+        return str(self.game._turn_number)
+
+    def __iadd__(self, value: int):
+        """Increment the turn."""
+        if value != 1:
+            raise ValueError(
+                'Cannot increment the turn counter by more than one.'
+            )
+        self.game._turn_number += 1
+        self.game.current_turn = ~self.game.current_turn
+        self.game.save()
+
+
 class Winner(enum.Enum):
     """An enum for the winner of a game."""
 
@@ -81,6 +110,12 @@ class Side(enum.Enum):
 
     HOME = enum.auto()
     AWAY = enum.auto()
+
+    def __invert__(self) -> Side:
+        """Get the other side."""
+        if self == Side.HOME:
+            return Side.AWAY
+        return Side.HOME
 
 
 class EnumField(pw.SmallIntegerField):
@@ -177,14 +212,14 @@ class Game(BaseModel):
     host = pw.ForeignKeyField(model=User, backref='games')
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
-    turn_number = pw.SmallIntegerField(default=1)
+    _turn_number = pw.SmallIntegerField(default=1, column_name='turn_number')
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
     starting_time = pw_postgres.IntervalField()    # initial timer value
     time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
 
     # timers at the start of the current turn, null means starting_time
-    _home_time = pw_postgres.IntervalField(null=True, column_name='home_time')
-    _away_time = pw_postgres.IntervalField(null=True, column_name='away_time')
+    home_time = pw_postgres.IntervalField(null=True)
+    away_time = pw_postgres.IntervalField(null=True)
 
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
@@ -197,25 +232,14 @@ class Game(BaseModel):
     started_at = pw.DateTimeField(null=True)
     ended_at = pw.DateTimeField(null=True)
 
-    @property
-    def home_time(self) -> datetime.timedelta:
-        """Get the timer for the home side."""
-        return self._home_time or self.timer_per_turn
-
-    @home_time.setter
-    def home_time(self, new: datetime.timedelta):
-        """Set the timer for the home side."""
-        self._home_time = new
-
-    @property
-    def away_time(self) -> datetime.timedelta:
-        """Get the timer for the away side."""
-        return self._away_time or self.timer_per_turn
-
-    @away_time.setter
-    def away_time(self, new: datetime.timedelta):
-        """Set the timer for the away side."""
-        self._away_time = new
+    def __init__(
+            self, *args: typing.Tuple[typing.Any],
+            **kwargs: typing.Dict[str, typing.Any]):
+        """Create a game."""
+        super().__init__(*args, **kwargs)
+        self.turn_number = TurnCounter(self)
+        self.home_time = self.starting_time
+        self.away_time = self.starting_time
 
     def start_game(self, away: User):
         """Start a game which had no away side."""
