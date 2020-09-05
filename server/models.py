@@ -16,6 +16,18 @@ db = pw.PostgresqlDatabase(
 )
 
 
+class Password:
+    """A class to hash unhashed passwords."""
+
+    def __init__(self, password: str):
+        """Store the password."""
+        self.password = password
+
+    def __str__(self):
+        """Hash the password."""
+        return HASHING_ALGORITHM(self.password.encode()).hexdigest()
+
+
 class HashedPassword:
     """A class to check for equality against hashed passwords."""
 
@@ -100,6 +112,22 @@ class BaseModel(pw.Model):
         database = db
         use_legacy_table_names = False
 
+    def __str__(self) -> str:
+        """Represent the model as a string."""
+        values = {}
+        for field in type(self)._meta.sorted_field_names:
+            values[field] = getattr(self, field)
+        main = []
+        for field in values:
+            if isinstance(values[field], datetime.datetime):
+                value = f"'{values[field]}'"
+            else:
+                value = repr(values[field])
+            if len(value) > 20:
+                value = value[:12] + '...' + value[-5:]
+            main.append(f'{field}={value}')
+        return f'<{type(self).__name__} ' + ' '.join(main) + '>'
+
 
 class User(BaseModel):
     """A model to represent a user."""
@@ -115,7 +143,7 @@ class User(BaseModel):
     @property
     def password(self) -> HashedPassword:
         """Return an object that will use hashing in it's equality check."""
-        return HashedPassword(self, self.password_hash)
+        return HashedPassword(self.password_hash)
 
     @password.setter
     def password(self, password: str):
