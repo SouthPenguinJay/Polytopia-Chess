@@ -7,11 +7,12 @@ import typing
 import config
 
 import peewee as pw
+import playhouse.postgres_ext as pw_postgres
 
 
 HASHING_ALGORITHM = hashlib.sha3_512
 
-db = pw.PostgresqlDatabase(
+db = pw_postgres.PostgresqlExtDatabase(
     config.DB_NAME, user=config.DB_USER, password=config.DB_PASSWORD
 )
 
@@ -167,11 +168,11 @@ class Game(BaseModel):
     host = pw.ForeignKeyField(model=User, backref='games')
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
-    mode = pw.SmallIntegerField(default=1)    # only valid value for now
-    seconds_per_game = pw.IntegerField()      # timer at the start of the game
-    seconds_per_turn = pw.IntegerField()      # timer incremement per turn
-    home_time = pw.IntegerField()             # timer for home
-    away_time = pw.IntegerField()             # timer for away
+    mode = pw.SmallIntegerField(default=1)         # only valid value for now
+    starting_time = pw_postgres.IntervalField()    # initial timer value
+    time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
+    home_time = pw_postgres.IntervalField()        # timer for home
+    away_time = pw_postgres.IntervalField()        # timer for away
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
     winner = EnumField(Winner, default=Winner.GAME_NOT_COMPLETE)
