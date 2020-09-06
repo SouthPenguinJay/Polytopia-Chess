@@ -121,6 +121,13 @@ class Side(enum.Enum):
             return Side.AWAY
         return Side.HOME
 
+    @property
+    def forwards(self) -> int:
+        """Return the direction that is forwards for this side."""
+        if self == Side.HOME:
+            return 1
+        return -1
+
 
 class EnumField(pw.SmallIntegerField):
     """A field where each value is an integer representing an option."""
