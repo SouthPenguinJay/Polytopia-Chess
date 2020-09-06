@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 import enum
 import hashlib
+import os
 import typing
 
 import config
@@ -13,23 +14,26 @@ import peewee as pw
 import playhouse.postgres_ext as pw_postgres
 
 
-HASHING_ALGORITHM = hashlib.sha3_512
+def hash_password(password: str) -> str:
+    """Hash a password."""
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac('sha3-512', password.encode(), salt, 100_000)
+    return salt + key
+
+
+def check_password(password: str, hashed: str) -> bool:
+    """Check a password against a hash."""
+    salt = hashed[:32]
+    key = hashed[32:]
+    attempt_key = hashlib.pbkdf2_hmac(
+        'sha3-512', password.encode(), salt, 100_000
+    )
+    return key == attempt_key
+
 
 db = pw_postgres.PostgresqlExtDatabase(
     config.DB_NAME, user=config.DB_USER, password=config.DB_PASSWORD
 )
-
-
-class Password:
-    """A class to hash unhashed passwords."""
-
-    def __init__(self, password: str):
-        """Store the password."""
-        self.password = password
-
-    def __str__(self) -> str:
-        """Hash the password."""
-        return HASHING_ALGORITHM(self.password.encode()).hexdigest()
 
 
 class HashedPassword:
@@ -41,8 +45,7 @@ class HashedPassword:
 
     def __eq__(self, password: str) -> bool:
         """Check for equality against an unhashed password."""
-        hashed_attempt = HASHING_ALGORITHM(password.encode()).hexdigest()
-        return hashed_attempt == self.hashed_password
+        return check_password(password, self.hashed_password)
 
 
 class TurnCounter:
@@ -178,7 +181,7 @@ class User(BaseModel):
     """A model to represent a user."""
 
     username = pw.CharField(max_length=32, unique=True)
-    password_hash = pw.FixedCharField(max_length=128)
+    password_hash = pw.BlobField()
     email = pw.CharField(max_length=255, unique=True)
     email_verified = pw.BooleanField(default=False)
     elo = pw.SmallIntegerField(default=1000)
@@ -193,7 +196,7 @@ class User(BaseModel):
     @password.setter
     def password(self, password: str):
         """Set the password to a hash of the provided password."""
-        self.password_hash = HASHING_ALGORITHM(password.encode()).hexdigest()
+        self.password_hash = hash_password(password)
 
 
 class Game(BaseModel):
