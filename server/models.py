@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 import enum
 import hashlib
+import hmac
 import os
 import typing
 
@@ -17,7 +18,7 @@ import playhouse.postgres_ext as pw_postgres
 def hash_password(password: str) -> str:
     """Hash a password."""
     salt = os.urandom(32)
-    key = hashlib.pbkdf2_hmac('sha3-512', password.encode(), salt, 100_000)
+    key = hashlib.pbkdf2_hmac('sha3-256', password.encode(), salt, 100_000)
     return salt + key
 
 
@@ -26,9 +27,9 @@ def check_password(password: str, hashed: str) -> bool:
     salt = hashed[:32]
     key = hashed[32:]
     attempt_key = hashlib.pbkdf2_hmac(
-        'sha3-512', password.encode(), salt, 100_000
+        'sha3-256', password.encode(), salt, 100_000
     )
-    return key == attempt_key
+    return hmac.compare_digest(key, attempt_key)
 
 
 db = pw_postgres.PostgresqlExtDatabase(
