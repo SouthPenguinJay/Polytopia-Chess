@@ -1,4 +1,6 @@
 """The chess gamemode."""
+import typing
+
 import models
 
 import peewee
@@ -6,6 +8,10 @@ import peewee
 
 class Chess:
     """A gamemode for chess."""
+
+    def __init__(self, game: models.Game):
+        """Store the game we are interested in."""
+        self.game == game
 
     def layout_board(self):
         """Put the pieces on the board."""
@@ -65,6 +71,33 @@ class Chess:
 
         victim = self.get_piece(rank, file)
         return victim.side != piece.side
+
+    def hypothetical_check(
+            self, side: models.Side,
+            *moves: typing.Tuple[models.Piece, int, int]) -> bool:
+        """Check if a series of moves would put a side in check."""
+        if self.hypothetical_moves is None:
+            raise RuntimeError('Checkmate detection recursion detected.')
+        self.hypothetical_moves = moves    # self.get_piece will observe this
+        king = models.Piece.get(
+            models.Piece.side == side,
+            models.Piece.piece_type == models.PieceType.KING,
+            models.Piece.game == self.game
+        )
+        enemies = models.Piece.select().where(
+            models.Piece.side == side,
+            models.Piece.game == self.game
+        )
+        for enemy in enemies:
+            check = self.validate_move(
+                enemy.rank, enemy.file, king.rank, king.file,
+                check_allowed=True
+            )
+            if check:
+                self.hypothetical_moves = None
+                return True
+        self.hypothetical_moves = None
+        return False
 
     def validate_pawn_move(
             self, pawn: models.Piece, rank: int, file: int) -> bool:
@@ -137,14 +170,33 @@ class Chess:
         """Validate a king's move."""
         absolute_rank_delta = abs(rank - king.rank)
         absolute_file_delta = abs(file - king.file)
+        if (not absolute_file_delta) and not king.has_moved:
+            if rank == 2:
+                rook_start = 0
+                rook_end = 3
+                empty_ranks = (1, 2, 3)
+            elif rank == 6:
+                rook_start = 7
+                rook_end = 5
+                empty_ranks = (5, 6)
+            else:
+                return False
+            rook = self.get_piece(rook_start, file)
+            if (not rook) or rook.has_moved:
+                return False
+            for empty_rank in empty_ranks:
+                if not self.get_piece(empty_rank, file):
+                    return False
+            return not self.hypothetical_check(
+                king.side, (king, rank, file), (rook, rook_end, file)
+            )
         if (absolute_rank_delta > 1) or (absolute_file_delta > 1):
             return False
-        # TODO: Handle castling.
         return True
 
     def validate_move(
             self, start_rank: int, start_file: int, end_rank: int,
-            end_file: int) -> bool:
+            end_file: int, check_allowed: bool = False) -> bool:
         """Validate a move."""
         if start_rank == end_rank and start_file == end_file:
             return False
@@ -167,5 +219,4 @@ class Chess:
         }
         if not validators[piece.piece_type](piece, end_rank, end_file):
             return False
-        # TODO: Check for moving into checkmate.
-        return True
+        return check_allowed or not self.hypothetical_check(piece.side)
