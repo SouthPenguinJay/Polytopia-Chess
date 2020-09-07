@@ -15,4 +15,3 @@ A chess game with custom pieces and boards. Join the discord https://discord.gg/
      }
      ```
   5. \<insert instructions for running the actual server, once that is set up\>
-  6. Have fun!
