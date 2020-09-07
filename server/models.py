@@ -268,6 +268,7 @@ class Piece(BaseModel):
     rank = pw.SmallIntegerField()
     side = EnumField(Side)
     has_moved = pw.BooleanField(default=False)
+    first_move_last_turn = pw.BooleanField(default=False)    # For en passant
     game = pw.ForeignKeyField(model=Game, backref='pieces')
 
 

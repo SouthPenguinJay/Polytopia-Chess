@@ -6,6 +6,9 @@ import models
 import peewee
 
 
+Move = typing.Tuple[models.Piece, int, int]
+
+
 class Chess:
     """A gamemode for chess."""
 
@@ -72,9 +75,25 @@ class Chess:
         victim = self.get_piece(rank, file)
         return victim.side != piece.side
 
+    def get_moves_in_direction(
+            self, piece: models.Piece, rank_direction: int,
+            file_direction: int) -> typing.Iterator[int, int]:
+        """Get all moves for a unit in a direction."""
+        rank, file = piece.rank, piece.file
+        while True:
+            rank += rank_direction
+            file += file_direction
+            target = self.get_piece(rank, file)
+            if target:
+                if target.side == piece.side:
+                    break
+                yield rank, file
+                break
+            else:
+                yield rank, file
+
     def hypothetical_check(
-            self, side: models.Side,
-            *moves: typing.Tuple[models.Piece, int, int]) -> bool:
+            self, side: models.Side, *moves: typing.Tuple[Move, ...]) -> bool:
         """Check if a series of moves would put a side in check."""
         if self.hypothetical_moves is None:
             raise RuntimeError('Checkmate detection recursion detected.')
@@ -119,12 +138,38 @@ class Chess:
                 return False
             if pawn.has_moved:
                 return False
-            return bool(
+            return not bool(
                 self.get_piece(rank, file)
                 or self.get_piece(rank, file - pawn.side.forwards)
             )
         else:
             return False
+
+    def get_pawn_moves(self, pawn: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a pawn."""
+        in_front = self.get_piece(pawn.rank, pawn.file + pawn.side.forwards)
+        if not in_front:
+            yield pawn.rank, pawn.file + pawn.side.forwards
+        if (not pawn.has_moved) and not in_front:
+            two_in_front = self.get_piece(
+                pawn.rank, pawn.file + pawn.side.forwards * 2
+            )
+            if two_in_front:
+                yield pawn.rank, pawn.file + pawn.side.forwards * 2
+        for direction in (-1, 1):
+            rank = pawn.rank + direction
+            file = pawn.file + pawn.side.forwards
+            target = self.get_piece(rank.file)
+            if not target:
+                en_passant_pawn = self.get_piece(rank, pawn.file)
+                en_passant_valid = (
+                    en_passant_pawn and en_passant_pawn.side != pawn.side
+                    and en_passant_pawn.first_move_last_turn
+                )
+                if en_passant_valid:
+                    yield (rank, file)
+            if target and target.side != pawn.side:
+                yield rank, file
 
     def validate_rook_move(
             self, rook: models.Piece, rank: int, file: int) -> bool:
@@ -134,6 +179,12 @@ class Chess:
         if rank_delta and file_delta:
             return False
         return self.path_is_empty(rook, rank, file)
+
+    def get_rook_moves(self, rook: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a rook."""
+        for direction in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            for move in self.get_moves_in_direction(rook, *direction):
+                yield move
 
     def validate_knight_move(
             self, knight: models.Piece, rank: int, file: int) -> bool:
@@ -145,6 +196,18 @@ class Chess:
         victim = self.get_piece(rank, file)
         return (not victim) or (victim.side != knight.side)
 
+    def get_knight_moves(
+            self, knight: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a knight."""
+        for file_absolute, rank_absolute in ((1, 2), (2, 1)):
+            for file_direction in (-1, 1):
+                for rank_direction in (-1, 1):
+                    file = knight.file + file_absolute * file_direction
+                    rank = knight.rank + rank_absolute * rank_direction
+                    victim = self.get_piece(rank, file)
+                    if (not victim) or (victim.side != knight.side):
+                        yield (rank, file)
+
     def validate_bishop_move(
             self, bishop: models.Piece, rank: int, file: int) -> bool:
         """Validate a bishop's move."""
@@ -153,6 +216,13 @@ class Chess:
         if absolute_rank_delta != absolute_file_delta:
             return False
         return self.path_is_empty(bishop, rank, file)
+
+    def get_bishop_moves(
+            self, bishop: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a bishop."""
+        for direction in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
+            for move in self.get_moves_in_direction(bishop, *direction):
+                yield move
 
     def validate_queen_move(
             self, queen: models.Piece, rank: int, file: int) -> bool:
@@ -164,6 +234,17 @@ class Chess:
         if not (bishops_move or rooks_move):
             return False
         return self.path_is_empty(queen, rank, file)
+
+    def get_queen_moves(
+            self, queen: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a queen."""
+        for rank_direction in (-1, 0, 1):
+            for file_direction in (-1, 0, 1):
+                direction = (rank_direction, file_direction)
+                if direction == (0, 0):
+                    continue
+                for move in self.get_moves_in_direction(queen, *direction):
+                    yield move
 
     def validate_king_move(
             self, king: models.Piece, rank: int, file: int) -> bool:
@@ -194,6 +275,38 @@ class Chess:
             return False
         return True
 
+    def get_king_moves(self, king: models.Piece) -> typing.Iterator[int, int]:
+        """Get all possible moves for a king."""
+        for rank_direction in (-1, 0, 1):
+            for file_direction in (-1, 0, 1):
+                direction = (rank_direction, file_direction)
+                if direction == (0, 0):
+                    continue
+                file = king.file + file_direction
+                rank = king.rank + rank_direction
+                victim = self.get_piece(rank, file)
+                if (not victim) or (victim.side != king.side):
+                    yield rank, file
+        if not king.has_moved:
+            options = ((0, 3, 2, (1, 2, 3)), (7, 5, 6, (5, 6)))
+            for rook_start, rook_end, king_end, empty_ranks in options:
+                rook = self.get_piece(rook_start, king.file)
+                if (not rook) or rook.has_moved:
+                    continue
+                empty_squares_empty = True
+                for empty_rank in empty_ranks:
+                    if not self.get_piece(empty_rank, file):
+                        empty_squares_empty = False
+                        break
+                if not empty_squares_empty:
+                    continue
+                valid = not self.hypothetical_check(
+                    king.side, (king, king_end, king.file),
+                    (rook, rook_end, king.file)
+                )
+                if valid:
+                    yield king_end, king.file
+
     def validate_move(
             self, start_rank: int, start_file: int, end_rank: int,
             end_file: int, check_allowed: bool = False) -> bool:
@@ -220,3 +333,35 @@ class Chess:
         if not validators[piece.piece_type](piece, end_rank, end_file):
             return False
         return check_allowed or not self.hypothetical_check(piece.side)
+
+    def possible_moves(self, side: models.Side) -> typing.Iterator[Move]:
+        """Get all possible moves for a side."""
+        pieces = models.Piece.select().where(
+            models.Piece.side == side,
+            models.Piece.game == self.game
+        )
+        move_generators = {
+            models.PieceType.PAWN: self.get_pawn_moves,
+            models.PieceType.ROOK: self.get_rook_moves,
+            models.PieceType.KNIGHT: self.get_knight_moves,
+            models.PieceType.BISHOP: self.get_bishop_moves,
+            models.PieceType.QUEEN: self.get_queen_moves,
+            models.PieceType.KING: self.get_king_moves
+        }
+        for piece in pieces:
+            for rank, file in move_generators[piece.piece_type](piece):
+                if not self.hypothetical_check(side, (piece, rank, file)):
+                    yield piece, rank, file
+
+    def check_checkmate(self, side: models.Side) -> bool:
+        """Check if the game has been won by checkmate."""
+        if not self.hypothetical_check(side):
+            return False
+        return bool(list(self.possible_moves(side)))
+
+    def check_stalemate(self) -> bool:
+        """Check if the game has ended in stalemate.
+
+        This method assumes that it is not checkmate.
+        """
+        return bool(list(self.possible_moves(self.game.current_turn)))
