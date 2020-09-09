@@ -16,6 +16,8 @@ import peewee as pw
 
 import playhouse.postgres_ext as pw_postgres
 
+import timing
+
 
 def hash_password(password: str) -> str:
     """Hash a password."""
@@ -74,6 +76,7 @@ class TurnCounter:
                 'Cannot increment the turn counter by more than one.'
             )
         self.game._turn_number += 1
+        self.game.timer.turn_end(self.game.current_turn)
         self.game.current_turn = ~self.game.current_turn
         arrangement = self.game.game_mode.freeze_game()
         GameState.create(
@@ -232,9 +235,18 @@ class Game(BaseModel):
     current_turn = EnumField(Side, default=Side.HOME)
     _turn_number = pw.SmallIntegerField(default=1, column_name='turn_number')
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
-    starting_time = pw_postgres.IntervalField()    # initial timer value
-    time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
     last_kill_or_pawn_move = pw.SmallIntegerField(default=1)
+
+    # initial timer value for each player
+    main_thinking_time = pw_postgres.IntervalField()
+    # time given to each player each turn before the main time is affected
+    fixed_extra_time = pw_postgres.IntervalField(
+        default=datetime.timedelta(0)
+    )
+    # amount timer is incremented after each turn
+    time_increment_per_turn = pw_postgres.IntervalField(
+        default=datetime.timedelta(0)
+    )
 
     # timers at the start of the current turn, null means starting_time
     home_time = pw_postgres.IntervalField(null=True)
@@ -272,6 +284,11 @@ class Game(BaseModel):
         """Get a gamemode instance associated with this game."""
         mode = gamemodes.GAMEMODES[self.mode]
         return mode(self)
+
+    @property
+    def timer(self) -> timing.Timer:
+        """Get a timer instance associated with this game."""
+        return timing.Timer(self)
 
 
 class Piece(BaseModel):
