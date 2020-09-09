@@ -10,6 +10,8 @@ import typing
 
 import config
 
+import gamemodes
+
 import peewee as pw
 
 import playhouse.postgres_ext as pw_postgres
@@ -73,6 +75,11 @@ class TurnCounter:
             )
         self.game._turn_number += 1
         self.game.current_turn = ~self.game.current_turn
+        arrangement = self.game.game_mode.freeze_game()
+        GameState.create(
+            game=self.game, turn_number=self.game._turn_number,
+            arrangement=arrangement
+        )
         self.game.save()
 
 
@@ -260,6 +267,12 @@ class Game(BaseModel):
         self.last_turn = datetime.datetime.now()
         self.save()
 
+    @property
+    def game_mode(self) -> gamemodes.GameMode:
+        """Get a gamemode instance associated with this game."""
+        mode = gamemodes.GAMEMODES[self.mode]
+        return mode(self)
+
 
 class Piece(BaseModel):
     """A model to represent a piece in a game."""
@@ -273,4 +286,16 @@ class Piece(BaseModel):
     game = pw.ForeignKeyField(model=Game, backref='pieces')
 
 
-db.create_tables([User, Game, Piece])
+class GameState(BaseModel):
+    """A model to represent a snapshot of a game.
+
+    Theoretically, this could replace Piece, but we leave Piece for the
+    current turn for ease of use.
+    """
+
+    game = pw.ForeignKeyField(model=Game, backref='pieces')
+    turn_number = pw.SmallIntegerField()
+    arrangement = pw.CharField(max_length=128)
+
+
+db.create_tables([User, Game, Piece, GameState])

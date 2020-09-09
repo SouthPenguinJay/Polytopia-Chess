@@ -1,20 +1,21 @@
 """The chess gamemode."""
+from __future__ import annotations
+
 import typing
+
+import gamemodes
 
 import models
 
 import peewee
 
 
-Move = typing.Tuple[models.Piece, int, int]
-
-
-class Chess:
+class Chess(gamemodes.GameMode):
     """A gamemode for chess."""
 
     def __init__(self, game: models.Game):
         """Store the game we are interested in."""
-        self.game == game
+        self.game = game
 
     def layout_board(self):
         """Put the pieces on the board."""
@@ -93,7 +94,10 @@ class Chess:
                 yield rank, file
 
     def hypothetical_check(
-            self, side: models.Side, *moves: typing.Tuple[Move, ...]) -> bool:
+            self, side: models.Side,
+            *moves: typing.Tuple[
+                typing.Tuple[models.Piece, int, int], ...
+            ]) -> bool:
         """Check if a series of moves would put a side in check."""
         if self.hypothetical_moves is None:
             raise RuntimeError('Checkmate detection recursion detected.')
@@ -275,6 +279,35 @@ class Chess:
             return False
         return True
 
+    def get_allowed_castling(self, king: models.Piece) -> typing.List[
+            typing.Tuple[models.Piece.Rook, int], ...]:
+        """Get a list of rooks the king is allowed to castle with.
+
+        Also returns which file it would move to in each case.
+        """
+        if king.has_moved:
+            return []
+        options = ((0, 3, 2, (1, 2, 3)), (7, 5, 6, (5, 6)))
+        castling_moves = []
+        for rook_start, rook_end, king_end, empty_files in options:
+            rook = self.get_piece(king.rank, rook_start)
+            if (not rook) or rook.has_moved:
+                continue
+            empty_squares_empty = True
+            for empty_file in empty_files:
+                if not self.get_piece(king.rank, empty_file):
+                    empty_squares_empty = False
+                    break
+            if not empty_squares_empty:
+                continue
+            valid = not self.hypothetical_check(
+                king.side, (king, king.rank, king_end),
+                (rook, king.rank, rook_end)
+            )
+            if valid:
+                castling_moves.append((rook, king_end))
+        return castling_moves
+
     def get_king_moves(self, king: models.Piece) -> typing.Iterator[int, int]:
         """Get all possible moves for a king."""
         for file_direction in (-1, 0, 1):
@@ -287,25 +320,8 @@ class Chess:
                 victim = self.get_piece(rank, file)
                 if (not victim) or (victim.side != king.side):
                     yield rank, file
-        if not king.has_moved:
-            options = ((0, 3, 2, (1, 2, 3)), (7, 5, 6, (5, 6)))
-            for rook_start, rook_end, king_end, empty_files in options:
-                rook = self.get_piece(king.rank, rook_start)
-                if (not rook) or rook.has_moved:
-                    continue
-                empty_squares_empty = True
-                for empty_file in empty_files:
-                    if not self.get_piece(rank, empty_file):
-                        empty_squares_empty = False
-                        break
-                if not empty_squares_empty:
-                    continue
-                valid = not self.hypothetical_check(
-                    king.side, (king, king.rank, king_end),
-                    (rook, king.rank, rook_end)
-                )
-                if valid:
-                    yield king_end, king.rank
+        for _rook, king_rank in self.get_allowed_castling(king):
+            yield king_rank, king.file
 
     def validate_move(
             self, start_rank: int, start_file: int, end_rank: int,
@@ -334,7 +350,8 @@ class Chess:
             return False
         return check_allowed or not self.hypothetical_check(piece.side)
 
-    def possible_moves(self, side: models.Side) -> typing.Iterator[Move]:
+    def possible_moves(self, side: models.Side) -> typing.Iterator[
+            typing.Tuple[models.Piece, int, int]]:
         """Get all possible moves for a side."""
         pieces = models.Piece.select().where(
             models.Piece.side == side,
@@ -355,12 +372,23 @@ class Chess:
 
     def game_is_over(self) -> models.Conclusion:
         """Check if the game has been won or tied.
-        
+
         If the return value is checkmate, the player whos turn it currently
-        is is in checkmate.
+        is is in checkmate. This method must be called after the GameState
+        for the current turn has been created. Note that a return of
+        THREEFOLD_REPETITION or FIFTY_MOVE_RULE should not immediately end the
+        game - rather, at least one player must claim the draw.
         """
-        # TODO: Handle draw by threefold repetition
-        #       Do we need to keep track of every position?
+        current_state = models.GameState.get(
+            models.GameState.game == self.game,
+            models.GameState.turn_number == int(self.game.turn_number)
+        )
+        identical_states = models.GameState.select().where(
+            models.GameState.game == self.game,
+            models.GameState.arrangement == current_state.arrangement
+        )
+        if len(list(identical_states)) >= 3:
+            return models.Conclusion.THREEFOLD_REPETITION
         if self.game.turn_number <= self.game.last_kill_or_pawn_move + 50:
             return models.Conclusion.FIFTY_MOVE_RULE
         moves_available = list(self.possible_moves(self.game.current_turn))
@@ -369,3 +397,38 @@ class Chess:
         if self.hypothetical_check(self.game.current_turn):
             return models.Conclusion.CHECKMATE
         return models.Conclusion.STALEMATE
+
+    def freeze_game(self) -> str:
+        """Store a snapshot of a game as a string."""
+        pieces = models.Piece.select().where(
+            models.Piece.game == self.game
+        ).order_by(
+            models.Piece.rank, models.Piece.file
+        )
+        arrangement = ''
+        castleable_rooks = []
+        for side in (self.game.current_turn, ~self.game.current_turn):
+            king = models.Piece.get(
+                models.Piece.game == self.game,
+                models.Piece.side == side,
+                models.Piece.piece_type == models.PieceType.KING
+            )
+            for rook, _king_rank in self.get_allowed_castling(king):
+                castleable_rooks.append(rook.id)
+        for piece in pieces:
+            if piece.piece_type == models.PieceType.KNIGHT:
+                abbrev = 'n'
+            else:
+                abbrev = piece.piece_type.name[0]
+            if piece.side == models.Side.HOME:
+                abbrev = abbrev.upper()
+            arrangement += (
+                abbrev + str(models.Piece.rank) + str(models.Piece.file)
+            )
+            if piece.piece_type == models.PieceType.PAWN:
+                if piece.first_move_last_turn:
+                    arrangement += 'X'
+            elif piece.piece_type == models.PieceType.ROOK:
+                if piece.id in castleable_rooks:
+                    arrangement += 'X'
+        return arrangement
