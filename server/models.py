@@ -227,6 +227,7 @@ class Game(BaseModel):
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
     starting_time = pw_postgres.IntervalField()    # initial timer value
     time_per_turn = pw_postgres.IntervalField()    # time incremement per turn
+    last_kill_or_pawn_move = pw.SmallIntegerField(default=1)
 
     # timers at the start of the current turn, null means starting_time
     home_time = pw_postgres.IntervalField(null=True)
@@ -264,8 +265,8 @@ class Piece(BaseModel):
     """A model to represent a piece in a game."""
 
     piece_type = EnumField(PieceType)
-    file = pw.SmallIntegerField()
     rank = pw.SmallIntegerField()
+    file = pw.SmallIntegerField()
     side = EnumField(Side)
     has_moved = pw.BooleanField(default=False)
     first_move_last_turn = pw.BooleanField(default=False)    # For en passant
