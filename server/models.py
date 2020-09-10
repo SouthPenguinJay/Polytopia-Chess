@@ -271,6 +271,8 @@ class Game(BaseModel):
         self.turn_number = TurnCounter(self)
         self.home_time = self.starting_time
         self.away_time = self.starting_time
+        self.game_mode = gamemodes.GAMEMODES[self.mode](self)
+        self.timer = timing.Timer(self)
 
     def start_game(self, away: User):
         """Start a game which had no away side."""
@@ -278,17 +280,6 @@ class Game(BaseModel):
         self.started_at = datetime.datetime.now()
         self.last_turn = datetime.datetime.now()
         self.save()
-
-    @property
-    def game_mode(self) -> gamemodes.GameMode:
-        """Get a gamemode instance associated with this game."""
-        mode = gamemodes.GAMEMODES[self.mode]
-        return mode(self)
-
-    @property
-    def timer(self) -> timing.Timer:
-        """Get a timer instance associated with this game."""
-        return timing.Timer(self)
 
 
 class Piece(BaseModel):
