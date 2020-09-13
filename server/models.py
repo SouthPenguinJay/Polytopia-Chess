@@ -1,6 +1,7 @@
 """Various Peewee models."""
 from __future__ import annotations
 
+import base64
 import datetime
 import enum
 import hashlib
@@ -261,7 +262,7 @@ class Game(BaseModel):
           This game has ended - either there is a winner, or it was a draw.
     """
 
-    host = pw.ForeignKeyField(model=User, backref='games')
+    host = pw.ForeignKeyField(model=User, backref='games', null=True)
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
     _turn_number = pw.SmallIntegerField(default=1, column_name='turn_number')

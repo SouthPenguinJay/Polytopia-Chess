@@ -3,19 +3,20 @@ from __future__ import annotations
 
 import typing
 
-import gamemodes
+import peewee
 
 import models
 
-import peewee
+from . import gamemode
 
 
-class Chess(gamemodes.GameMode):
+class Chess(gamemode.GameMode):
     """A gamemode for chess."""
 
     def __init__(self, game: models.Game):
         """Store the game we are interested in."""
         self.game = game
+        self.hypothetical_moves = None
 
     def layout_board(self):
         """Put the pieces on the board."""
@@ -35,11 +36,11 @@ class Chess(gamemodes.GameMode):
             )
         for file in range(8):
             models.Piece.create(
-                piece_type=p.PAWN, rank=0, file=file, side=models.SIDE.HOME,
+                piece_type=p.PAWN, rank=0, file=file, side=models.Side.HOME,
                 game=self.game
             )
             models.Piece.create(
-                piece_type=p.PAWN, rank=7, file=file, side=models.SIDE.AWAY,
+                piece_type=p.PAWN, rank=7, file=file, side=models.Side.AWAY,
                 game=self.game
             )
 
@@ -50,7 +51,7 @@ class Chess(gamemodes.GameMode):
                 models.Piece.file == file, models.Piece.rank == rank,
                 models.Piece.game == self.game
             )
-        except peewee.NotFound:
+        except peewee.DoesNotExist:
             return None
 
     def path_is_empty(

@@ -7,5 +7,5 @@ app = Flask(__name__)
 
 @app.route('/')
 def hello_world() -> str:
-    """A test endpoint."""
+    """Send a test response."""
     return 'Hello, World!'

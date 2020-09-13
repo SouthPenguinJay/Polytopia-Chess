@@ -40,9 +40,3 @@ class GameMode:
     def freeze_game(self) -> str:
         """Store a snapshot of a game as a string."""
         raise NotImplementedError
-
-
-import chess    # noqa:E402,I100 - import at end to avoid circular import
-
-
-GAMEMODES = [chess.Chess]

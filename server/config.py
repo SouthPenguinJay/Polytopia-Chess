@@ -9,3 +9,5 @@ with open('config.json') as f:
 DB_NAME = config['db_name']
 DB_USER = config.get('db_user', DB_NAME)
 DB_PASSWORD = config.get('db_password', '')
+
+HOST_URL = config['host_url']
