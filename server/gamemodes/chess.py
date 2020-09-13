@@ -159,7 +159,7 @@ class Chess(gamemode.GameMode):
             two_in_front = self.get_piece(
                 pawn.rank + pawn.side.forwards * 2, pawn.file
             )
-            if two_in_front:
+            if not two_in_front:
                 yield pawn.file, pawn.rank + pawn.side.forwards * 2
         for direction in (-1, 1):
             file = pawn.file + direction
