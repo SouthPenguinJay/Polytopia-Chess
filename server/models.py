@@ -36,6 +36,13 @@ def check_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(key, attempt_key)
 
 
+def generate_random_token(max_length: int) -> str:
+    """Generate a random token."""
+    # Divide max_length by 4 because os.urandom generates a series
+    # of bytes and we convert to base 64.
+    return base64.b64encode(os.urandom(max_length // 4))
+
+
 db = pw_postgres.PostgresqlExtDatabase(
     config.DB_NAME, user=config.DB_USER, password=config.DB_PASSWORD
 )
@@ -200,8 +207,8 @@ class User(BaseModel):
 
     username = pw.CharField(max_length=32, unique=True)
     password_hash = pw.BlobField()
-    email = pw.CharField(max_length=255, unique=True)
-    email_verified = pw.BooleanField(default=False)
+    _email = pw.CharField(max_length=255, unique=True, column_name='email')
+    email_verify_token = pw.CharField(max_length=128, null=True)
     elo = pw.SmallIntegerField(default=1000)
     avatar = pw.BlobField(null=True)
     created_at = pw.DateTimeField(default=datetime.datetime.now)
@@ -215,6 +222,30 @@ class User(BaseModel):
     def password(self, password: str):
         """Set the password to a hash of the provided password."""
         self.password_hash = hash_password(password)
+
+    @property
+    def email(self) -> str:
+        """Get the user's email."""
+        return self._email
+
+    @email.setter
+    def email(self, new_email: str):
+        """Set the user's email and generate an email verification token."""
+        self._email = new_email
+        self.email_verify_token = generate_random_token(128)
+
+    @property
+    def email_verified(self) -> bool:
+        """Check if the user has a verified email."""
+        return self._email and not self.email_verify_token
+
+    @email_verified.setter
+    def email_verified(self, verified: bool):
+        """Mark the user's email as verified."""
+        if not verified:
+            self.email_verify_token = generate_random_token(128)
+        else:
+            self.email_verify_token = None
 
 
 class Game(BaseModel):
