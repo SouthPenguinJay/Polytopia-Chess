@@ -1,4 +1,6 @@
 """Utilities for controlling the timers."""
+from __future__ import annotations
+
 import datetime
 
 import models

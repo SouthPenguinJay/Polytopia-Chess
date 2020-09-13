@@ -1,6 +1,7 @@
 """Various Peewee models."""
 from __future__ import annotations
 
+import base64
 import datetime
 import enum
 import hashlib
