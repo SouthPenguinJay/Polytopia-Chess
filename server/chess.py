@@ -100,16 +100,17 @@ class Chess(gamemodes.GameMode):
                 typing.Tuple[models.Piece, int, int], ...
             ]) -> bool:
         """Check if a series of moves would put a side in check."""
-        if self.hypothetical_moves is None:
+        if moves is None:
             raise RuntimeError('Checkmate detection recursion detected.')
         self.hypothetical_moves = moves    # self.get_piece will observe this
+        """***Note that the hypothetical moves are not yet being used***"""
         king = models.Piece.get(
             models.Piece.side == side,
             models.Piece.piece_type == models.PieceType.KING,
             models.Piece.game == self.game
         )
         enemies = models.Piece.select().where(
-            models.Piece.side == side,
+            models.Piece.side == side.invert,
             models.Piece.game == self.game
         )
         for enemy in enemies:
