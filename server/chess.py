@@ -62,7 +62,6 @@ class Chess(gamemodes.GameMode):
         """
         file_delta = file - piece.file
         rank_delta = rank - piece.rank
-        assert abs(file_delta) == abs(rank_delta), 'Path must be straight.'
         steps = max(abs(file_delta), abs(rank_delta))
         file_step = file_delta // steps
         rank_step = rank_delta // steps
