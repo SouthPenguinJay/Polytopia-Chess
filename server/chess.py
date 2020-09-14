@@ -78,13 +78,15 @@ class Chess(gamemodes.GameMode):
         return victim.side != piece.side
 
     def on_board(rank: int, file: int) -> bool:
-        """check if valid square i.e. rank and file on board, rename to valid_square if you want"""
-        """move min/max_rank and min/max_file to other file if appropriate"""
+        """check if valid square i.e. rank and file on board"""
         min_rank = 0
         max_rank = 7
         min_file = 0
         max_file = 7
-        return rank >= min_rank and rank <= max_rank and file >= min_file and file <= max_file
+        return (
+            rank >= min_rank and rank <= max_rank
+            and file >= min_file and file <= max_file
+        )
 
     def get_moves_in_direction(
             self, piece: models.Piece, rank_direction: int,
@@ -94,9 +96,9 @@ class Chess(gamemodes.GameMode):
         while True:
             file += file_direction
             rank += rank_direction
-            if validate_move(self, piece.rank, piece.file, rank, file):
+            if validate_move_piece(self, piece, rank, file):
                 yield rank, file
-            else
+            else:
                 break
 
     def hypothetical_check(
@@ -157,9 +159,11 @@ class Chess(gamemodes.GameMode):
 
     def get_pawn_moves(self, pawn: models.Piece) -> typing.Iterator[int, int]:
         """Get all possible moves for a pawn."""
-        for rank_absolute, file in ((1, 0), (2, 0), (1, -1), (1, 1)):
-            rank = rank_absolute * pawn.side.forwards
-            if validate_move(self, pawn.rank, pawn.file rank, file):
+        options = ((1, 0), (2, 0), (1, -1), (1, 1))
+        for absolute_rank_delta, file_delta in options:
+            rank = pawn.rank + absolute_rank_delta * pawn.side.forwards
+            file = pawn.file + file_delta
+            if validate_move_piece(self, pawn, rank, file):
                 yield rank, file
 
     def validate_rook_move(
@@ -195,7 +199,7 @@ class Chess(gamemodes.GameMode):
                 for file_direction in (-1, 1):
                     rank = knight.rank + rank_absolute * rank_direction
                     file = knight.file + file_absolute * file_direction
-                    if validate_move(self, knight.rank, knight.file, rank, file):
+                    if validate_move_piece(self, knight, rank, file):
                         yield rank, file
 
     def validate_bishop_move(
@@ -273,10 +277,9 @@ class Chess(gamemodes.GameMode):
         """
         if king.has_moved:
             return []
-        options = ((0, 3, 2, (1, 2, 3)), (7, 5, 6, (5, 6)))
         castling_moves = []
-        for king_end, rook_start in ((2,0),(6,7)):
-            if validate_move(self, king.rank, king.file, king.rank, king_end):
+        for king_end, rook_start in ((2, 0),(6, 7)):
+            if validate_move_piece(self, king, king.rank, king_end):
                 rook = self.get_piece(king.rank, rook_start)
                 castling_moves.append((rook, king_end))
         return castling_moves
@@ -290,7 +293,7 @@ class Chess(gamemodes.GameMode):
                     continue
                 rank = king.rank + rank_direction
                 file = king.file + file_direction
-                if validate_move(self, king.rank, king.file, rank, file):
+                if validate_move_piece(self, king, rank, file):
                     yield rank, file
         for _rook, king_rank in self.get_allowed_castling(king):
             yield king_rank, king.file
@@ -299,16 +302,22 @@ class Chess(gamemodes.GameMode):
             self, start_rank: int, start_file: int, end_rank: int,
             end_file: int, check_allowed: bool = False) -> bool:
         """Validate a move."""
-        if start_file == end_file and start_rank == end_rank:
+        piece = self.get_piece(start_rank, start_file)
+        if not piece:
+            return False
+        return validate_move_piece(self, piece, end_rank, end_file, check_allowed)
+
+    def validate_move_piece(
+            self, piece: models.Piece, end_rank: int,
+            end_file: int, check_allowed: bool = False) -> bool:
+        """Validate a move from piece."""
+        if piece.file == end_file and piece.rank == end_rank:
             return False
         out_of_board = (
             (end_file < 0) or (end_file > 7)
             or (end_rank < 0) or (end_file > 7)
         )
         if out_of_board:
-            return False
-        piece = self.get_piece(start_rank, start_file)
-        if not piece:
             return False
         validators = {
             models.PieceType.PAWN: self.validate_pawn_move,
