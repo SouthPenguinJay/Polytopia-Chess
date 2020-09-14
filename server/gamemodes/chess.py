@@ -321,8 +321,8 @@ class Chess(gamemode.GameMode):
                 victim = self.get_piece(rank, file)
                 if (not victim) or (victim.side != king.side):
                     yield rank, file
-        for _rook, king_rank in self.get_allowed_castling(king):
-            yield king_rank, king.file
+        for _rook, king_file in self.get_allowed_castling(king):
+            yield king.rank, king_file
 
     def validate_move(
             self, start_rank: int, start_file: int, end_rank: int,
