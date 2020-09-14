@@ -62,14 +62,12 @@ class Chess(gamemodes.GameMode):
         """
         file_delta = file - piece.file
         rank_delta = rank - piece.rank
-        """Commented out as only does diagonals, can add orthogonals as well if you want
-        """assert abs(file_delta) == abs(rank_delta), 'Path must be straight.'
         steps = max(abs(file_delta), abs(rank_delta))
         file_step = file_delta // steps
         rank_step = rank_delta // steps
 
         # Intentionally not including the final step.
-        for step in range(1, steps - 1):
+        for step in range(1, steps):
             this_file = piece.file + step * file_step
             this_rank = piece.rank + step * rank_step
             if self.get_piece(this_rank, this_file):
