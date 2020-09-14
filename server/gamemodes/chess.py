@@ -390,7 +390,7 @@ class Chess(gamemode.GameMode):
         )
         if len(list(identical_states)) >= 3:
             return models.Conclusion.THREEFOLD_REPETITION
-        if self.game.turn_number <= self.game.last_kill_or_pawn_move + 50:
+        if self.game.turn_number >= self.game.last_kill_or_pawn_move + 50:
             return models.Conclusion.FIFTY_MOVE_RULE
         moves_available = list(self.possible_moves(self.game.current_turn))
         if moves_available:
