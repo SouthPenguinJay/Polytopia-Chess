@@ -27,20 +27,20 @@ class Chess(gamemodes.GameMode):
         ]
         for file, piece_type in enumerate(back_row):
             models.Piece.create(
-                piece_type=piece_type, rank=1, file=file,
+                piece_type=piece_type, rank=0, file=file,
                 side=models.Side.HOME, game=self.game
             )
             models.Piece.create(
-                piece_type=piece_type, rank=6, file=file,
+                piece_type=piece_type, rank=7, file=file,
                 side=models.Side.AWAY, game=self.game
             )
         for file in range(8):
             models.Piece.create(
-                piece_type=p.PAWN, rank=0, file=file, side=models.Side.HOME,
+                piece_type=p.PAWN, rank=1, file=file, side=models.Side.HOME,
                 game=self.game
             )
             models.Piece.create(
-                piece_type=p.PAWN, rank=7, file=file, side=models.Side.AWAY,
+                piece_type=p.PAWN, rank=6, file=file, side=models.Side.AWAY,
                 game=self.game
             )
 
