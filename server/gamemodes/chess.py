@@ -349,7 +349,7 @@ class Chess(gamemode.GameMode):
         }
         if not validators[piece.piece_type](piece, end_rank, end_file):
             return False
-        return check_allowed or not self.hypothetical_check(piece.side)
+        return check_allowed or not self.hypothetical_check(piece.side,(piece, end_rank, end_file))
 
     def possible_moves(self, side: models.Side) -> typing.Iterator[
             typing.Tuple[models.Piece, int, int]]:
