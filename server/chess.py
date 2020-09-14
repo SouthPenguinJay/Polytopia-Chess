@@ -332,7 +332,7 @@ class Chess(gamemodes.GameMode):
             return False
         out_of_board = (
             (end_file < 0) or (end_file > 7)
-            or (end_rank < 0) or (end_file > 7)
+            or (end_rank < 0) or (end_rank > 7)
         )
         if out_of_board:
             return False
