@@ -139,7 +139,7 @@ class Chess(gamemodes.GameMode):
                 en_passant_valid = (
                     en_passant_pawn and en_passant_pawn.side != pawn.side
                     and en_passant_pawn.first_move_last_turn
-                    and pawn.rank = (7 + pawn.side.forwards) / 2
+                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
                 )
                 return (victim and victim.side != pawn.side) or en_passant_valid
             else:
