@@ -1,4 +1,4 @@
-"""Respond to API calls.
+"""Respond to account related API calls.
 
 This module does not handle encryption.
 """
@@ -137,27 +137,14 @@ def get_account(username: str) -> typing.Dict[str, typing.Any]:
         )
     except peewee.DoesNotExist:
         raise RequestError(1003)
-    return {
-        'id': user.id,
-        'username': username,
-        'elo': user.elo,
-        'avatar': None    # FIXME: Should be a url, how are we gonna do media?
-    }
+    return user.to_json()
 
 
 def get_accounts(page: int) -> typing.Dict[str, typing.Any]:
     """Get a paginated list of accounts."""
     users, pages = paginate(models.User.select(), page)
-    users = [
-        {
-            'id': user.id,
-            'username': user.username,
-            'elo': user.elo,
-            'avatar': None    # FIXME: Should be a url, see above
-        } for user in users
-    ]
     return {
-        'users': users,
+        'users': [user.to_json() for user in users],
         'pages': pages
     }
 

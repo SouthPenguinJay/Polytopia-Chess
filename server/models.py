@@ -248,6 +248,21 @@ class User(BaseModel):
         else:
             self.email_verify_token = None
 
+    def to_json(
+            self, hide_email: bool = True) -> typing.Dict[str, typing.Any]:
+        """Get a dict representation of this user."""
+        response = {
+            'id': self.id,
+            'username': self.username,
+            'elo': self.elo,
+            # FIXME: Avatar url should be a url, how are we gonna do media?
+            'avatar_url': None,
+            'created_at': self.created_at.to_timestamp()
+        }
+        if not hide_email:
+            response['email'] = self.email
+        return response
+
 
 class Game(BaseModel):
     """A model to represent a game.
@@ -264,6 +279,7 @@ class Game(BaseModel):
 
     host = pw.ForeignKeyField(model=User, backref='games', null=True)
     away = pw.ForeignKeyField(model=User, backref='games', null=True)
+    invited = pw.ForeignKeyField(model=User, backref='invites', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
     _turn_number = pw.SmallIntegerField(default=1, column_name='turn_number')
     mode = pw.SmallIntegerField(default=1)         # only valid value for now
