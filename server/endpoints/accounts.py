@@ -142,7 +142,9 @@ def get_account(username: str) -> typing.Dict[str, typing.Any]:
 
 def get_accounts(page: int) -> typing.Dict[str, typing.Any]:
     """Get a paginated list of accounts."""
-    users, pages = paginate(models.User.select(), page)
+    users, pages = paginate(
+        models.User.select().order_by(models.User.elo.desc), page
+    )
     return {
         'users': [user.to_json() for user in users],
         'pages': pages
