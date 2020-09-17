@@ -256,9 +256,8 @@ class Chess(gamemode.GameMode):
         """Validate a king's move."""
         absolute_file_delta = abs(file - king.file)
         absolute_rank_delta = abs(rank - king.rank)
-        #if statement to handle where castling is attempted
+        # Check for castling attempt.
         if (not absolute_rank_delta) and not king.has_moved and absolute_file_delta > 1:
-            #check that castling is valid
             if file == 2:
                 rook_start = 0
                 rook_end = 3
@@ -277,7 +276,7 @@ class Chess(gamemode.GameMode):
                     return False
             if self.hypothetical_check(king.side):
                 return False
-            if self.hypothetical_check(king.side,(king,rank,rook_end)):
+            if self.hypothetical_check(king.side, (king, rank, rook_end)):
                 return False
             return True
         if (absolute_file_delta > 1) or (absolute_rank_delta > 1):
