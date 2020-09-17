@@ -256,7 +256,9 @@ class Chess(gamemode.GameMode):
         """Validate a king's move."""
         absolute_file_delta = abs(file - king.file)
         absolute_rank_delta = abs(rank - king.rank)
-        if (not absolute_rank_delta) and not king.has_moved:
+        #if statement to handle where castling is attempted
+        if (not absolute_rank_delta) and not king.has_moved and absolute_file_delta > 1:
+            #check that castling is valid
             if file == 2:
                 rook_start = 0
                 rook_end = 3
@@ -271,14 +273,19 @@ class Chess(gamemode.GameMode):
             if (not rook) or rook.has_moved:
                 return False
             for empty_file in empty_files:
-                if not self.get_piece(rank, empty_file):
+                if self.get_piece(rank, empty_file):
                     return False
-            return not self.hypothetical_check(
-                king.side, (king, rank, file), (rook, rank, rook_end)
-            )
+            if self.hypothetical_check(king.side):
+                return False
+            if self.hypothetical_check(king.side,(king,rank,rook_end)):
+                return False
+            return True
         if (absolute_file_delta > 1) or (absolute_rank_delta > 1):
             return False
-        return True
+        victim = self.get_piece(rank, file)
+        if (not victim) or (victim.side != king.side):
+            return True
+        return False
 
     def get_allowed_castling(self, king: models.Piece) -> typing.List[
             typing.Tuple[models.Piece.Rook, int], ...]:
