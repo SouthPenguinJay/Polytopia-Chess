@@ -135,7 +135,13 @@ class Chess(gamemode.GameMode):
                 return not self.get_piece(rank, file)
             elif absolute_file_delta == 1:
                 victim = self.get_piece(rank, file)
-                return victim and victim.side != pawn.side
+                en_passant_pawn = self.get_piece(pawn.rank, file)
+                en_passant_valid = (
+                    en_passant_pawn and en_passant_pawn.side != pawn.side
+                    and en_passant_pawn.first_move_last_turn
+                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
+                )
+                return (victim and victim.side != pawn.side) or en_passant_valid
             else:
                 return False
         elif relative_rank_delta == 2:
@@ -170,6 +176,7 @@ class Chess(gamemode.GameMode):
                 en_passant_valid = (
                     en_passant_pawn and en_passant_pawn.side != pawn.side
                     and en_passant_pawn.first_move_last_turn
+                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
                 )
                 if en_passant_valid:
                     yield rank, file
