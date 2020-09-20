@@ -4,20 +4,21 @@ from __future__ import annotations
 import base64
 import datetime
 import enum
+import functools
 import hashlib
 import hmac
 import os
 import typing
 
-import config
-
-import gamemodes
-
 import peewee as pw
-
 import playhouse.postgres_ext as pw_postgres
 
+import config
+import gamemodes
 import timing
+
+from endpoints import converters
+from endpoints.helpers import RequestError
 
 
 def hash_password(password: str) -> str:
@@ -41,7 +42,8 @@ def generate_random_token(max_length: int) -> str:
     """Generate a random token."""
     # Divide max_length by 4 because os.urandom generates a series
     # of bytes and we convert to base 64.
-    return base64.b64encode(os.urandom(max_length // 4))
+    token = base64.b64encode(os.urandom(max_length // 4)).decode()
+    return token.replace('/', '_')    # It will be used in a URL.
 
 
 db = pw_postgres.PostgresqlExtDatabase(
@@ -202,6 +204,23 @@ class BaseModel(pw.Model):
             + f'\n{end_indent}>'
         )
 
+    @classmethod
+    def converter(cls, value: typing.Union[int, str]) -> pw.Model:
+        """Convert a parameter to an instance of the model."""
+        field_name = getattr(cls.PolyChessMeta, 'primary_parameter_key', 'id')
+        field = getattr(cls, field_name)
+        if isinstance(field, pw.AutoField):
+            base_converter = converters._int_converter
+        elif isinstance(field, pw.CharField):
+            base_converter = lambda x: x    # noqa: E731
+        else:
+            raise RuntimeError(f'Converter needed for field {field!r}.')
+        model_id = base_converter(value)
+        try:
+            return cls.get(field == model_id)
+        except cls.DoesNotExist:
+            raise RequestError(cls.PolyChessMeta.not_found_error)
+
 
 class User(BaseModel):
     """A model to represent a user."""
@@ -213,6 +232,12 @@ class User(BaseModel):
     elo = pw.SmallIntegerField(default=1000)
     avatar = pw.BlobField(null=True)
     created_at = pw.DateTimeField(default=datetime.datetime.now)
+
+    class PolyChessMeta:
+        """Set the "not found" error code and use username as key."""
+
+        not_found_error = 1001
+        primary_parameter_key = 'username'
 
     @property
     def password(self) -> HashedPassword:
@@ -257,7 +282,7 @@ class User(BaseModel):
             'elo': self.elo,
             # FIXME: Avatar url should be a url, how are we gonna do media?
             'avatar_url': None,
-            'created_at': self.created_at.to_timestamp()
+            'created_at': int(self.created_at.timestamp())
         }
         if not hide_email:
             response['email'] = self.email
@@ -277,8 +302,8 @@ class Game(BaseModel):
           This game has ended - either there is a winner, or it was a draw.
     """
 
-    host = pw.ForeignKeyField(model=User, backref='games', null=True)
-    away = pw.ForeignKeyField(model=User, backref='games', null=True)
+    host = pw.ForeignKeyField(model=User, backref='host_games', null=True)
+    away = pw.ForeignKeyField(model=User, backref='away_games', null=True)
     invited = pw.ForeignKeyField(model=User, backref='invites', null=True)
     current_turn = EnumField(Side, default=Side.HOME)
     _turn_number = pw.SmallIntegerField(default=1, column_name='turn_number')
@@ -288,13 +313,9 @@ class Game(BaseModel):
     # initial timer value for each player
     main_thinking_time = pw_postgres.IntervalField()
     # time given to each player each turn before the main time is affected
-    fixed_extra_time = pw_postgres.IntervalField(
-        default=datetime.timedelta(0)
-    )
+    fixed_extra_time = pw_postgres.IntervalField()
     # amount timer is incremented after each turn
-    time_increment_per_turn = pw_postgres.IntervalField(
-        default=datetime.timedelta(0)
-    )
+    time_increment_per_turn = pw_postgres.IntervalField()
 
     # timers at the start of the current turn, null means starting_time
     home_time = pw_postgres.IntervalField(null=True)
@@ -311,23 +332,38 @@ class Game(BaseModel):
     started_at = pw.DateTimeField(null=True)
     ended_at = pw.DateTimeField(null=True)
 
+    class PolyChessMeta:
+        """Set the "not found" error code."""
+
+        not_found_error = 2001
+
     def __init__(
             self, *args: typing.Tuple[typing.Any],
             **kwargs: typing.Dict[str, typing.Any]):
         """Create a game."""
         super().__init__(*args, **kwargs)
         self.turn_number = TurnCounter(self)
-        self.home_time = self.starting_time
-        self.away_time = self.starting_time
-        self.game_mode = gamemodes.GAMEMODES[self.mode](self)
+        self.home_time = self.main_thinking_time
+        self.away_time = self.main_thinking_time
         self.timer = timing.Timer(self)
 
     def start_game(self, away: User):
-        """Start a game which had no away side."""
+        """Start a game."""
+        self.invited = None
         self.away = away
         self.started_at = datetime.datetime.now()
         self.last_turn = datetime.datetime.now()
         self.save()
+
+    @functools.cached_property
+    def game_mode(self) -> gamemodes.GameMode:
+        """Get a game mode instance for this game.
+
+        This is implemented as a cached property rather than set on
+        initialisation as Peewee seems to set some properties after
+        initialisation in some cases.
+        """
+        return gamemodes.GAMEMODES[self.mode - 1](self)
 
 
 class Piece(BaseModel):
@@ -353,5 +389,9 @@ class GameState(BaseModel):
     turn_number = pw.SmallIntegerField()
     arrangement = pw.CharField(max_length=128)
 
+
+HostUser = User.alias()
+AwayUser = User.alias()
+InvitedUser = User.alias()
 
 db.create_tables([User, Game, Piece, GameState])
