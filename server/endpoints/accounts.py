@@ -14,7 +14,8 @@ import config
 import emails
 import models
 
-from .helpers import RequestError, paginate
+from .helpers import RequestError, paginate, interpret_integrity_error
+from .converters import convert
 
 
 def _validate_username(username: str):
@@ -69,6 +70,8 @@ def _validate_email(email: str):
             raise RequestError(1131)
 
 
+@models.db.atomic()
+@convert
 def create_account(username: str, password: str, email: str):
     """Create a new user account."""
     _validate_username(username)
@@ -78,11 +81,18 @@ def create_account(username: str, password: str, email: str):
         user = models.User.create(
             username=username, password=password, email=email
         )
-    except peewee.IntegrityError:
-        raise RequestError(1113)
-    send_verification_email(user)
+    except peewee.IntegrityError as e:
+        type_, field = interpret_integrity_error(e)
+        if type_ == 'duplicate':
+            if field == 'username':
+                raise RequestError(1113)
+            elif field == 'email':
+                raise RequestError(1133)
+        raise e
+    send_verification_email(user=user)
 
 
+@convert
 def send_verification_email(user: models.User):
     """Send a verification email to a user."""
     if user.email_verified:
@@ -95,6 +105,8 @@ def send_verification_email(user: models.User):
     emails.send_email(user.email, message)
 
 
+@models.db.atomic()
+@convert
 def verify_email(username: str, token: str):
     """Verify an email address."""
     try:
@@ -108,11 +120,11 @@ def verify_email(username: str, token: str):
     user.save()
 
 
+@models.db.atomic()
+@convert
 def update_account(
-        user: models.User,
-        password: typing.Optional[str] = None,
-        avatar: typing.Optional[bytes] = None,
-        email: typing.Optional[str] = None):
+        user: models.User, password: str = None, avatar: bytes = None,
+        email: str = None):
     """Update a user's account."""
     if password:
         _validate_password(password)
@@ -120,30 +132,34 @@ def update_account(
     if email:
         _validate_email(email)
         user.email = email
-        send_verification_email(user)
     if avatar:
         # FIXME: Some validation that the avatar is actually an image?
         #        Maybe a maximum size, too? Should media really be stored in
         #        the database? Is there a better way?
         user.avatar = avatar
-    user.save()
-
-
-def get_account(username: str) -> typing.Dict[str, typing.Any]:
-    """Get a user account."""
     try:
-        user = models.User.get(
-            models.User.username == username
-        )
-    except peewee.DoesNotExist:
-        raise RequestError(1003)
-    return user.to_json()
+        user.save()
+    except peewee.IntegrityError as e:
+        type_, field = interpret_integrity_error(e)
+        if type_ == 'duplicate' and field == 'email':
+            raise RequestError(1133)
+        raise e
+    else:
+        if email:
+            send_verification_email(user=user)
 
 
-def get_accounts(page: int) -> typing.Dict[str, typing.Any]:
+@convert
+def get_account(account: models.User) -> typing.Dict[str, typing.Any]:
+    """Get a user account."""
+    return account.to_json()
+
+
+@convert
+def get_accounts(page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get a paginated list of accounts."""
     users, pages = paginate(
-        models.User.select().order_by(models.User.elo.desc), page
+        models.User.select().order_by(models.User.elo.desc()), page
     )
     return {
         'users': [user.to_json() for user in users],
@@ -151,20 +167,20 @@ def get_accounts(page: int) -> typing.Dict[str, typing.Any]:
     }
 
 
+@models.db.atomic()
+@convert
 def delete_account(user: models.User):
     """Delete a user's account."""
-    for game in user.games:
-        if game.host == user:
-            if game.away:
-                game.winner = models.Winner.AWAY
-                game.conclusion_type = models.Conclusion.RESIGN
-                game.ended_at = datetime.datetime.now()
-                game.save()
-            else:
-                game.delete_instance(recursive=True)
-        else:
-            game.winner = models.Winner.HOME
-            game.conclusion_type = models.Conclusion.RESIGN
-            game.ended_at = datetime.datetime.now()
-            game.save()
+    models.Game.delete().where((
+        (models.Game.host == user) & (models.Game.away == None)
+        | (models.Game.host == None) & (models.Game.away == user)
+    ))
+    models.Game.update(
+        winner=models.Winner.AWAY, conclusion_type=models.Conclusion.RESIGN,
+        ended_at=datetime.datetime.now()
+    ).where(models.Game.host == user)
+    models.Game.update(
+        winner=models.Winner.HOME, conclusion_type=models.Conclusion.RESIGN,
+        ended_at=datetime.datetime.now()
+    ).where(models.Game.away == user)
     user.delete_instance()
