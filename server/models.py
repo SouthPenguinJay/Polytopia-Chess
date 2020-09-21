@@ -250,6 +250,8 @@ class User(BaseModel):
             raise RequestError(1001)
         if user.password != password:
             raise RequestError(1302)
+        if user.email_verified:
+            raise RequestError(1307)
         session = Session.create(user=user, token=token)
         return session
 

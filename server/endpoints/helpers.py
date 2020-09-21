@@ -1,16 +1,20 @@
 """Helpers for all endpoints."""
 from __future__ import annotations
 
-import json
 import functools
+import json
 import math
 import re
 import typing
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 import flask
 
 import peewee
 
+import config
 import models
 
 from . import converters
@@ -70,8 +74,23 @@ def interpret_integrity_error(
 
 def _decrypt_request(raw: bytes) -> typing.Dict[str, typing.Any]:
     """Decrypt a JSON object encrypted with our public key."""
-    # TODO: Implement.
-    return {}
+    try:
+        raw_json = config.PRIVATE_KEY.decrypt(
+            raw,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+    except ValueError:
+        raise RequestError(3003)
+    try:
+        return json.loads(raw_json.decode())
+    except json.JSONDecodeError:
+        raise RequestError(3103)
+    except UnicodeDecodeError:
+        raise RequestError(3103)
 
 
 def _process_request(
@@ -113,7 +132,8 @@ def _process_request(
 
 def endpoint(
         url: str, method: str,
-        encrypt_request: bool = False) -> typing.Callable:
+        encrypt_request: bool = False,
+        raw_return: bool = True) -> typing.Callable:
     """Create a wrapper for an endpoint."""
     method = method.upper()
     if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
@@ -139,13 +159,24 @@ def endpoint(
             else:
                 code = 200
             if response is None:
-                response = {}
                 code = 204
-            response = flask.jsonify(response)
-            response.status_code = code
-            return response
+            if raw_return:
+                response = response or ''
+                return flask.Response(
+                    response, status=code, mimetype='text/plain'
+                )
+            else:
+                response = flask.jsonify(response or {})
+                response.status_code = code
+                return response
 
         flask_wrapped = app.route(url, methods=[method])(return_wrapped)
         return flask_wrapped
 
     return wrapper
+
+
+@endpoint('/rsa_key', method='GET', raw_return=True)
+def get_public_key() -> str:
+    """Get our public RSA key."""
+    return config.PUBLIC_KEY
