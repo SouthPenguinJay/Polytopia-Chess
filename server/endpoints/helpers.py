@@ -68,18 +68,58 @@ def interpret_integrity_error(
         raise ValueError('Unknown integrity error.') from error
 
 
-def _process_request(
-        request: flask.Request, encrypt_request: bool) -> typing.Tuple[
-            models.User, typing.Dict[str, typing.Any]]:
-    """Handle authentication and encryption."""
+def _decrypt_request(raw: bytes) -> typing.Dict[str, typing.Any]:
+    """Decrypt a JSON object encrypted with our public key."""
     # TODO: Implement.
-    return None, {}
+    return {}
+
+
+def _process_request(
+        request: flask.Request, method: str,
+        encrypt_request: bool) -> typing.Dict[str, typing.Any]:
+    """Handle authentication and encryption."""
+    if method in ('GET', 'CONNECT', 'DELETE'):
+        data = dict(request.args)
+    elif method in ('POST', 'PATCH'):
+        if encrypt_request:
+            data = _decrypt_request(request.get_data())
+        else:
+            data = request.get_json(force=True, silent=True)
+        if not isinstance(data, dict):
+            raise RequestError(3103)
+    if 'session_id' in data:
+        session_id = data.pop('session_id')
+    if 'session_token' in data:
+        session_token = data.pop('session_token')
+    if bool(session_id) ^ bool(session_token):
+        raise RequestError(1303)
+    elif session_id and session_token:
+        try:
+            session = models.Session.get_by_id(session_id)
+        except peewee.DoesNotExist:
+            raise RequestError(1304)
+        if session_token != session.token:
+            raise RequestError(1305)
+        if session.expired:
+            session.delete_instance()
+            raise RequestError(1306)
+        request.session = session
+        user = session.user
+        data['user'] = user
+    else:
+        request.session = None
+    return {}
 
 
 def endpoint(
         url: str, method: str,
         encrypt_request: bool = False) -> typing.Callable:
     """Create a wrapper for an endpoint."""
+    method = method.upper()
+    if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
+        raise RuntimeError(f'Unhandled method "{method}".')
+    if encrypt_request and method not in ('POST', 'PATCH'):
+        raise RuntimeError('Cannot encrypt bodyless request.')
 
     def wrapper(endpoint: typing.Callable) -> typing.Callable:
         """Wrap an endpoint."""
@@ -89,17 +129,18 @@ def endpoint(
         def return_wrapped(
                 **kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
             """Handle errors and convert the response to JSON."""
-            user, data = _process_request(flask.request, encrypt_request)
+            data = _process_request(flask.request, method, encrypt_request)
             data.update(kwargs)
-            if user:
-                data['user'] = user
             try:
-                response = converter_wrapped(**data) or {}
+                response = converter_wrapped(**data)
             except RequestError as error:
                 response = error.as_dict
                 code = 400
             else:
                 code = 200
+            if response is None:
+                response = {}
+                code = 204
             response = flask.jsonify(response)
             response.status_code = code
             return response

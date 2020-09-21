@@ -18,8 +18,13 @@
     "1200": "Email verification error.",
         "1201": "Email already verified.",
         "1202": "Username or verification token not found.",
-    "1300": "Not authenticated.",
+    "1300": "Authentication failed.",
         "1301": "No credentials used.",
+        "1302": "Incorrect password.",
+        "1303": "Session ID AND request token must be passed.",
+        "1304": "Session ID not found.",
+        "1305": "Incorrect session token.",
+        "1306": "Session has expired.",
   "2000": "Games error.",
         "2001": "Game not found.",
     "2100": "Invitations error.",
@@ -33,6 +38,7 @@
     "3100": "Invalid data syntax.",
         "3101": "Invalid integer syntax.",
         "3102": "Invalid base 64 string.",
+        "3103": "Invalid JSON object.",
     "3200": "Pagination error.",
         "3201": "Page does not exist."
 }

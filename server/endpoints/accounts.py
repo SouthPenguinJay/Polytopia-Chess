@@ -3,9 +3,10 @@
 This module does not handle encryption.
 """
 import datetime
-import flask
 import hashlib
 import typing
+
+import flask
 
 import peewee
 
@@ -70,6 +71,20 @@ def _validate_email(email: str):
     if len(parts) > 2:
         if not (parts[0].startswith('"') and parts[-2].endswith('"')):
             raise RequestError(1131)
+
+
+@models.db.atomic()
+@endpoint('/accounts/login', method='POST', encrypt_request=True)
+def login(username: str, password: str, token: bytes):
+    """Create a new authentication session."""
+    models.User.login(username, password, token)
+
+
+@models.db.atomic()
+@endpoint('/accounts/logout', method='GET')
+def logout(user: models.User):
+    """Create a new authentication session."""
+    flask.request.session.delete_instance()
 
 
 @models.db.atomic()
