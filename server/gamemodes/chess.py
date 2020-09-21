@@ -77,7 +77,7 @@ class Chess(gamemode.GameMode):
         return victim.side != piece.side
 
     def on_board(self, rank: int, file: int) -> bool:
-        """check if valid square i.e. rank and file on board"""
+        """Check if valid square i.e. rank and file on board."""
         return (
             rank >= 0 and rank <= 7
             and file >= 0 and file <= 7
@@ -94,9 +94,7 @@ class Chess(gamemode.GameMode):
             if not self.on_board(rank, file):
                 break
             target = self.get_piece(rank, file)
-            if (((not target) or (target.side != piece.side))
-                    and not self.hypothetical_check(piece.Side,
-                    (piece, rank, file))):
+            if (not target) or (target.side != piece.side):
                 yield rank, file
             if target:
                 break
@@ -147,9 +145,11 @@ class Chess(gamemode.GameMode):
                 en_passant_valid = (
                     en_passant_pawn and en_passant_pawn.side != pawn.side
                     and en_passant_pawn.first_move_last_turn
-                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
+                    and pawn.rank == (4 if pawn.side == models.Side.HOME
+                                      else 3)
                 )
-                return (victim and victim.side != pawn.side) or en_passant_valid
+                return ((victim and victim.side != pawn.side)
+                        or en_passant_valid)
             else:
                 return False
         elif relative_rank_delta == 2:
@@ -171,8 +171,7 @@ class Chess(gamemode.GameMode):
             rank = pawn.rank + absolute_rank_delta * pawn.side.forwards
             file = pawn.file + file_delta
             if (self.on_board(rank, file)
-                    and self.validate_pawn_move(pawn, rank, file)
-                    and self.hypothetical_check(pawn.side, (pawn, rank, file))):
+                    and self.validate_pawn_move(pawn, rank, file)):
                 yield rank, file
 
     def validate_rook_move(
@@ -210,8 +209,7 @@ class Chess(gamemode.GameMode):
                     file = knight.file + file_absolute * file_direction
                     victim = self.get_piece(rank, file)
                     if (not victim) or (victim.side != knight.side):
-                        if not self.hypothetical_check(knight, rank, file):
-                            yield rank, file
+                        yield rank, file
 
     def validate_bishop_move(
             self, bishop: models.Piece, rank: int, file: int) -> bool:
@@ -280,7 +278,6 @@ class Chess(gamemode.GameMode):
             return False
         return True
 
-
     def get_king_moves(self, king: models.Piece) -> typing.Iterator[int, int]:
         """Get all possible moves for a king."""
         for file_direction in (-1, 0, 1):
@@ -293,9 +290,7 @@ class Chess(gamemode.GameMode):
                 if not self.on_board(file, rank):
                     continue
                 victim = self.get_piece(rank, file)
-                if (((not victim) or (victim.side != king.side))
-                        and not self.hypothetical_check(king.side,
-                        (king, rank, file))):
+                if (not victim) or (victim.side != king.side):
                     yield rank, file
         if not king.has_moved:
             for file_direction in (-2, 2):
