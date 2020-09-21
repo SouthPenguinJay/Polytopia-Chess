@@ -5,16 +5,16 @@ import peewee
 
 import models
 
-from .helpers import RequestError
-from .converters import convert
+from .helpers import RequestError, endpoint
 
 
-_start_socket_session = lambda x, y: x or y
-_end_socket_session = lambda x, y: x or y
+# TODO: Implement sockets.
+_start_socket_session = lambda x, y: None    # noqa: E731
+_end_socket_session = lambda x, y: None      # noqa: E731
 
 
 @models.db.atomic()
-@convert
+@endpoint('/games/find', method='CONNECT')
 def find_game(
         user: models.User,
         main_thinking_time: datetime.timedelta,
@@ -43,7 +43,7 @@ def find_game(
 
 
 @models.db.atomic()
-@convert
+@endpoint('/games/send_invitation', method='CONNECT')
 def send_invitation(
         user: models.User,
         invitee: models.User,
@@ -63,7 +63,7 @@ def send_invitation(
 
 
 @models.db.atomic()
-@convert
+@endpoint('/games/invites/<game>', method='CONNECT')
 def accept_invitation(user: models.User, game: models.Game):
     """Accept a game you have been invited to."""
     if game.invited != user:
@@ -73,7 +73,7 @@ def accept_invitation(user: models.User, game: models.Game):
 
 
 @models.db.atomic()
-@convert
+@endpoint('/games/invites/<game>', method='DELETE')
 def decline_invitation(user: models.User, game: models.Game):
     """Decline a game you have been invited to."""
     if game.invited != user:

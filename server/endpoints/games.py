@@ -11,17 +11,16 @@ import peewee
 
 import models
 
-from .helpers import paginate
-from .converters import convert
+from .helpers import endpoint, paginate
 
 
 def dt(x: datetime.datetime) -> int:
-    """Utility for converting datetimes to ints."""
+    """Convert datetimes to ints."""
     return int(x.timestamp())
 
 
-def td(x: datetime.timedelta):
-    """Utility for converting timedeltas to ints."""
+def td(x: datetime.timedelta) -> int:
+    """Convert timedeltas to ints."""
     return int(x.total_seconds())
 
 
@@ -80,14 +79,14 @@ def _get_list_of_games(
     }
 
 
-@convert
+@endpoint('/games/invites', method='GET')
 def get_incoming_invites(
         user: models.User, page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get a list of incoming invites for a user."""
     return _get_list_of_games((models.Game.invited == user,), page)
 
 
-@convert
+@endpoint('/games/searches', method='GET')
 def get_outgoing_searches(
         user: models.User, page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get a list of game searches and outgoing invites for a user."""
@@ -100,7 +99,7 @@ def get_outgoing_searches(
     )
 
 
-@convert
+@endpoint('/games/ongoing', method='GET')
 def get_ongoing_games(
         user: models.User, page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get games a user is currently taking part in."""
@@ -114,7 +113,7 @@ def get_ongoing_games(
     )
 
 
-@convert
+@endpoint('/games/completed', method='GET')
 def get_completed_games(
         account: models.User, page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get games a user has completed."""
@@ -127,7 +126,7 @@ def get_completed_games(
     )
 
 
-@convert
+@endpoint('/games/common_completed', method='GET')
 def get_common_completed_games(
         user: models.User, account: models.User,
         page: int = 0) -> typing.Dict[str, typing.Any]:
