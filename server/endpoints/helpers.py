@@ -106,6 +106,8 @@ def _process_request(
             data = request.get_json(force=True, silent=True)
         if not isinstance(data, dict):
             raise RequestError(3103)
+    session_id = None
+    session_token = None
     if 'session_id' in data:
         session_id = data.pop('session_id')
     if 'session_token' in data:

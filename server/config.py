@@ -37,7 +37,7 @@ else:
     with open('config.json', 'w') as f:
         json.dump(config, f)
 
-PUBLIC_KEY = PRIVATE_KEY.public_bytes(
+PUBLIC_KEY = PRIVATE_KEY.public_key().public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
 ).decode()

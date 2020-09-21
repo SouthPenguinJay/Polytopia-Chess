@@ -7,8 +7,6 @@ import typing
 
 import peewee
 
-from .helpers import RequestError
-
 
 def _int_converter(value: typing.Union[str, int]) -> int:
     """Convert an integer parameter."""
@@ -118,3 +116,6 @@ def wrap(endpoint: typing.Callable) -> typing.Callable:
             raise RequestError(3002)
 
     return wrapped
+
+
+from .helpers import RequestError    # noqa: E402 - Avoid circular import.
