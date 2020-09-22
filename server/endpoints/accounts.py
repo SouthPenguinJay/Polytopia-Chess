@@ -118,8 +118,8 @@ def send_verification_email(user: models.User):
         'verify_email', username=user.username, token=user.email_verify_token
     )
     url = f'https://' + config.HOST_URL + path
-    message = f'Please click here to verify your email address: {url}'
-    emails.send_email(user.email, message)
+    message = f'Please click here to verify your email address: {url}.'
+    emails.send_email(user.email, message, 'Polychess email verification')
 
 
 @models.db.atomic()

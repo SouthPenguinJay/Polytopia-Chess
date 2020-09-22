@@ -14,6 +14,13 @@ DB_NAME = config['db_name']
 DB_USER = config.get('db_user', DB_NAME)
 DB_PASSWORD = config.get('db_password', '')
 
+
+SMTP_SERVER = config['smtp_server']
+SMTP_PORT = config.get('smtp_port', 465)
+SMTP_USERNAME = config.get('smtp_username', 'apikey')
+SMTP_PASSWORD = config['smtp_password']
+EMAIL_ADDRESS = config['email_address']
+
 HOST_URL = config['host_url']
 
 # Get the public/private key pair or generate if not found.
@@ -35,7 +42,7 @@ else:
     )
     config['private_key'] = base64.b64encode(_raw_key).decode()
     with open('config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
 PUBLIC_KEY = PRIVATE_KEY.public_key().public_bytes(
     encoding=serialization.Encoding.PEM,
