@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import typing
 
-import models
+from .. import models
 
 
 class GameMode:

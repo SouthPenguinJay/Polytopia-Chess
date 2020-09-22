@@ -2,7 +2,7 @@
 import smtplib
 import ssl
 
-from config import (
+from .config import (
     EMAIL_ADDRESS, SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USERNAME
 )
 

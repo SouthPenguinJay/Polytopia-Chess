@@ -9,9 +9,8 @@ import typing
 
 import peewee
 
-import models
-
 from .helpers import endpoint, paginate
+from .. import models
 
 
 def dt(x: datetime.datetime) -> int:

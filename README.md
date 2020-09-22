@@ -59,7 +59,6 @@ We will add more content to it as we set up.
 
 ### 7: Run the server
 
-  1. Navigate to the `server/` folder in the repo (eg. `cd server`).
-  2. Run `app.py` with Python 3, eg. `python3 app.py`.
+Run `server/` as a Python module, eg. `python3 -m server`.
 
 TODO: Add instructions for running in production, maybe.
