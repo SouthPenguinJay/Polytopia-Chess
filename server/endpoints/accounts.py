@@ -12,13 +12,10 @@ import peewee
 
 import requests
 
-import config
-import emails
-import models
-
 from .helpers import (
     RequestError, endpoint, interpret_integrity_error, paginate
 )
+from .. import config, emails, models
 
 
 def _validate_username(username: str):

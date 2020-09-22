@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime
 
-import models
+from . import models
 
 
 class Timer:

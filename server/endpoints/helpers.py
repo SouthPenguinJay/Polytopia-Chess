@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import json
 import math
+import pathlib
 import re
 import typing
 
@@ -14,16 +15,16 @@ import flask
 
 import peewee
 
-import config
-import models
-
 from . import converters
+from .. import config, models
 
 
 app = flask.Flask(__name__)
 
 
-with open('endpoints/errors.json') as f:
+errors_file = pathlib.Path(__file__).parent.absolute() / 'errors.json'
+
+with open(errors_file) as f:
     ERROR_CODES = json.load(f)
 
 

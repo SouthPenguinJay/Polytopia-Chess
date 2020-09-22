@@ -5,9 +5,8 @@ import typing
 
 import peewee
 
-import models
-
 from . import gamemode
+from .. import models
 
 
 class Chess(gamemode.GameMode):

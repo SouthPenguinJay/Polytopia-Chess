@@ -11,14 +11,12 @@ import os
 import typing
 
 import peewee as pw
+
 import playhouse.postgres_ext as pw_postgres
 
-import config
-import gamemodes
-import timing
-
-from endpoints import converters
-from endpoints.helpers import RequestError
+from . import config, gamemodes, timing
+from .endpoints import converters
+from .endpoints.helpers import RequestError
 
 
 def hash_password(password: str) -> str:

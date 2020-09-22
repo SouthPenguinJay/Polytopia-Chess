@@ -3,9 +3,8 @@ import datetime
 
 import peewee
 
-import models
-
 from .helpers import RequestError, endpoint
+from .. import models
 
 
 # TODO: Implement sockets.

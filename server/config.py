@@ -1,12 +1,15 @@
 """Load the config settings."""
 import base64
 import json
+import pathlib
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 
-with open('config.json') as f:
+_config_file = pathlib.Path(__file__).parent.absolute() / 'config.json'
+
+with open(_config_file) as f:
     config = json.load(f)
 
 
