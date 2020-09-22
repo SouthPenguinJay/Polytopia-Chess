@@ -6,6 +6,8 @@ import datetime
 import hashlib
 import typing
 
+import flask
+
 import peewee
 
 import requests
@@ -14,8 +16,9 @@ import config
 import emails
 import models
 
-from .helpers import RequestError, paginate, interpret_integrity_error
-from .converters import convert
+from .helpers import (
+    RequestError, endpoint, interpret_integrity_error, paginate
+)
 
 
 def _validate_username(username: str):
@@ -71,7 +74,21 @@ def _validate_email(email: str):
 
 
 @models.db.atomic()
-@convert
+@endpoint('/accounts/login', method='POST', encrypt_request=True)
+def login(username: str, password: str, token: bytes):
+    """Create a new authentication session."""
+    models.User.login(username, password, token)
+
+
+@models.db.atomic()
+@endpoint('/accounts/logout', method='GET')
+def logout(user: models.User):
+    """Create a new authentication session."""
+    flask.request.session.delete_instance()
+
+
+@models.db.atomic()
+@endpoint('/accounts/create', method='POST', encrypt_request=True)
 def create_account(username: str, password: str, email: str):
     """Create a new user account."""
     _validate_username(username)
@@ -92,21 +109,21 @@ def create_account(username: str, password: str, email: str):
     send_verification_email(user=user)
 
 
-@convert
+@endpoint('/accounts/resend_verification_email', method='GET')
 def send_verification_email(user: models.User):
     """Send a verification email to a user."""
     if user.email_verified:
         raise RequestError(1201)
-    url = (
-        f'https://{config.HOST_URL}/accounts/verify_email/'
-        f'{user.username}/{user.email_verify_token}'
+    path = flask.url_for(
+        'verify_email', username=user.username, token=user.email_verify_token
     )
+    url = f'https://' + config.HOST_URL + path
     message = f'Please click here to verify your email address: {url}'
     emails.send_email(user.email, message)
 
 
 @models.db.atomic()
-@convert
+@endpoint('/accounts/verify_email/<username>/<token>', method='GET')
 def verify_email(username: str, token: str):
     """Verify an email address."""
     try:
@@ -121,7 +138,7 @@ def verify_email(username: str, token: str):
 
 
 @models.db.atomic()
-@convert
+@endpoint('/accounts/me', method='PATCH', encrypt_request=True)
 def update_account(
         user: models.User, password: str = None, avatar: bytes = None,
         email: str = None):
@@ -149,13 +166,13 @@ def update_account(
             send_verification_email(user=user)
 
 
-@convert
+@endpoint('/user/<account>', method='GET')
 def get_account(account: models.User) -> typing.Dict[str, typing.Any]:
     """Get a user account."""
     return account.to_json()
 
 
-@convert
+@endpoint('/accounts/all', method='GET')
 def get_accounts(page: int = 0) -> typing.Dict[str, typing.Any]:
     """Get a paginated list of accounts."""
     users, pages = paginate(
@@ -168,13 +185,13 @@ def get_accounts(page: int = 0) -> typing.Dict[str, typing.Any]:
 
 
 @models.db.atomic()
-@convert
+@endpoint('/accounts/me', method='DELETE')
 def delete_account(user: models.User):
     """Delete a user's account."""
     models.Game.delete().where((
         (models.Game.host == user) & (models.Game.away == None)
         | (models.Game.host == None) & (models.Game.away == user)
-    ))
+    ))    # noqa: E711
     models.Game.update(
         winner=models.Winner.AWAY, conclusion_type=models.Conclusion.RESIGN,
         ended_at=datetime.datetime.now()

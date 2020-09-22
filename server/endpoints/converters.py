@@ -7,8 +7,6 @@ import typing
 
 import peewee
 
-from .helpers import RequestError
-
 
 def _int_converter(value: typing.Union[str, int]) -> int:
     """Convert an integer parameter."""
@@ -58,13 +56,16 @@ def _default_converter(
 
 
 def get_converters(
-        endpoint: typing.Callable) -> typing.Dict[str, typing.Callable]:
+        endpoint: typing.Callable) -> typing.Tuple[
+            bool, typing.Dict[str, typing.Callable]]:
     """Detect the type hints used and provide converters for them."""
     converters = {}
+    authenticated = False
     params = inspect.signature(endpoint).parameters.items()
     for n, param in enumerate(params):
         name, details = param
         if n == 0 and name == 'user':
+            authenticated = True
             continue
         type_hint = details.annotation
         if isinstance(type_hint, str):
@@ -88,22 +89,33 @@ def get_converters(
         else:
             converter = _plain_converter(converter)
         converters[name] = converter
-    return converters
+    return authenticated, converters
 
 
-def convert(endpoint: typing.Callable) -> typing.Callable:
+def wrap(endpoint: typing.Callable) -> typing.Callable:
     """Wrap an endpoint to convert its arguments."""
-    converters = get_converters(endpoint)
+    authenticated, converters = get_converters(endpoint)
 
     @functools.wraps(endpoint)
-    def wrapper(**kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+    def wrapped(**kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         """Convert arguments before calling the endpoint."""
+        if authenticated and not kwargs.get('user'):
+            raise RequestError(1301)
+        elif kwargs.get('user') and not authenticated:
+            del kwargs['user']
         converted = {}
         for kwarg in kwargs:
             if kwarg in converters:
                 converted[kwarg] = converters[kwarg](kwargs[kwarg])
             else:
                 converted[kwarg] = kwargs[kwarg]
-        return endpoint(**converted)
+        try:
+            return endpoint(**converted)
+        except TypeError:
+            # Unexpected key word argument or missing required argument.
+            raise RequestError(3002)
 
-    return wrapper
+    return wrapped
+
+
+from .helpers import RequestError    # noqa: E402 - Avoid circular import.

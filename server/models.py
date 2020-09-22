@@ -180,7 +180,7 @@ class BaseModel(pw.Model):
         database = db
         use_legacy_table_names = False
 
-    def __str__(self, indent: int = 1) -> str:
+    def __repr__(self, indent: int = 1) -> str:
         """Represent the model as a string."""
         values = {}
         for field in type(self)._meta.sorted_field_names:
@@ -239,6 +239,22 @@ class User(BaseModel):
         not_found_error = 1001
         primary_parameter_key = 'username'
 
+    @classmethod
+    def login(
+            cls, username: str, password: str,
+            token: bytes) -> typing.Optional[Session]:
+        """Create a session if the credentials are correct."""
+        try:
+            user = cls.get(cls.username == username)
+        except pw.DoesNotExist:
+            raise RequestError(1001)
+        if user.password != password:
+            raise RequestError(1302)
+        if user.email_verified:
+            raise RequestError(1307)
+        session = Session.create(user=user, token=token)
+        return session
+
     @property
     def password(self) -> HashedPassword:
         """Return an object that will use hashing in it's equality check."""
@@ -246,8 +262,12 @@ class User(BaseModel):
 
     @password.setter
     def password(self, password: str):
-        """Set the password to a hash of the provided password."""
+        """Set the password to a hash of the provided password.
+
+        Also clears all sessions.
+        """
         self.password_hash = hash_password(password)
+        Session.delete().where(Session.user == self).execute()
 
     @property
     def email(self) -> str:
@@ -287,6 +307,27 @@ class User(BaseModel):
         if not hide_email:
             response['email'] = self.email
         return response
+
+
+class Session(BaseModel):
+    """A model to represent an authentication session for a user."""
+
+    # FIXME: This is pretty arbitrary. What sort of time would make sense?
+    MAX_AGE = datetime.timedelta(days=30)
+
+    user = pw.ForeignKeyField(model=User, backref='sessions')
+    token = pw.BlobField()
+    created_at = pw.DateTimeField(default=datetime.datetime.now)
+
+    @property
+    def expired(self) -> bool:
+        """Check if the session has expired."""
+        age = datetime.datetime.now() - self.created_at
+        return age < Session.MAX_AGE
+
+    def __str__(self) -> str:
+        """Display as base 64."""
+        return base64.b64encode(self.token).decode()
 
 
 class Game(BaseModel):
