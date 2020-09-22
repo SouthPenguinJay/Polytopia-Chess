@@ -42,7 +42,7 @@ else:
     )
     config['private_key'] = base64.b64encode(_raw_key).decode()
     with open('config.json', 'w') as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=4)
 
 PUBLIC_KEY = PRIVATE_KEY.public_key().public_bytes(
     encoding=serialization.Encoding.PEM,
