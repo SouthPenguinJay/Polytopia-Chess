@@ -138,9 +138,13 @@ class Chess(gamemode.GameMode):
                 en_passant_valid = (
                     en_passant_pawn and en_passant_pawn.side != pawn.side
                     and en_passant_pawn.first_move_last_turn
-                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
+                    and pawn.rank == (
+                        4 if pawn.side == models.Side.HOME else 3
+                    )
                 )
-                return (victim and victim.side != pawn.side) or en_passant_valid
+                return (
+                    (victim and victim.side != pawn.side) or en_passant_valid
+                )
             else:
                 return False
         elif relative_rank_delta == 2:
@@ -175,7 +179,9 @@ class Chess(gamemode.GameMode):
                 en_passant_valid = (
                     en_passant_pawn and en_passant_pawn.side != pawn.side
                     and en_passant_pawn.first_move_last_turn
-                    and pawn.rank == (4 if pawn.side == models.Side.HOME else 3)
+                    and pawn.rank == (
+                        4 if pawn.side == models.Side.HOME else 3
+                    )
                 )
                 if en_passant_valid:
                     yield rank, file
@@ -263,7 +269,8 @@ class Chess(gamemode.GameMode):
         absolute_file_delta = abs(file - king.file)
         absolute_rank_delta = abs(rank - king.rank)
         # Check for castling attempt.
-        if (not absolute_rank_delta) and not king.has_moved and absolute_file_delta > 1:
+        if ((not absolute_rank_delta)
+                and not king.has_moved and absolute_file_delta > 1):
             if file == 2:
                 rook_start = 0
                 rook_end = 3

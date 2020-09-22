@@ -72,9 +72,13 @@ def _validate_email(email: str):
 
 @models.db.atomic()
 @endpoint('/accounts/login', method='POST', encrypt_request=True)
-def login(username: str, password: str, token: bytes):
+def login(
+        username: str, password: str, token: bytes) -> typing.Dict[str, int]:
     """Create a new authentication session."""
-    models.User.login(username, password, token)
+    if len(token) != 32:
+        raise RequestError(1308)
+    session = models.User.login(username, password, token)
+    return {'session_id': session.id}
 
 
 @models.db.atomic()
@@ -163,9 +167,27 @@ def update_account(
             send_verification_email(user=user)
 
 
+@endpoint('/accounts/me', method='GET')
+def get_own_account(user: models.User) -> typing.Dict[str, typing.Any]:
+    """Get the user's own account."""
+    data = user.to_json()
+    data['email'] = user.email
+    return data
+
+
 @endpoint('/user/<account>', method='GET')
 def get_account(account: models.User) -> typing.Dict[str, typing.Any]:
     """Get a user account."""
+    return account.to_json()
+
+
+@endpoint('/accounts/account', method='GET')
+def get_account_by_id(id: int) -> typing.Dict[str, typing.Any]:
+    """Get a user account by ID."""
+    try:
+        account = models.User.get_by_id(id)
+    except peewee.DoesNotExist:
+        raise RequestError(1001)
     return account.to_json()
 
 

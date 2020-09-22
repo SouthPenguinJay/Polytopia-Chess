@@ -69,6 +69,8 @@ def _get_list_of_games(
                 value = dt(value)
             elif isinstance(value, enum.Enum):
                 value = int(value)
+            elif isinstance(value, models.TurnCounter):
+                value = int(value)
             dumped[field] = value
         games.append(dumped)
     return {
@@ -108,7 +110,7 @@ def get_ongoing_games(
             models.Game.started_at != None,    # noqa: E711
             models.Game.ended_at == None    # noqa: E711
         ),
-        page, 'last_turn'
+        page, 'last_turn', 'current_turn', 'turn_number'
     )
 
 
@@ -121,7 +123,7 @@ def get_completed_games(
             (models.Game.host == account) | (models.Game.away == account),
             models.Game.ended_at != None    # noqa: E711
         ),
-        page, 'ended_at', 'conclusion_type'
+        page, 'ended_at', 'conclusion_type', 'winner'
     )
 
 
@@ -138,5 +140,5 @@ def get_common_completed_games(
             ),
             models.Game.ended_at != None    # noqa: E711
         ),
-        page, 'ended_at', 'conclusion_type'
+        page, 'ended_at', 'conclusion_type', 'winner'
     )

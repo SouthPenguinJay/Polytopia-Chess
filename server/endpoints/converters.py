@@ -13,7 +13,7 @@ def _int_converter(value: typing.Union[str, int]) -> int:
     try:
         return int(value)
     except ValueError:
-        raise RequestError(3101)
+        raise RequestError(3111)
 
 
 def _bytes_converter(value: typing.Union[str, bytes]) -> bytes:
@@ -24,7 +24,7 @@ def _bytes_converter(value: typing.Union[str, bytes]) -> bytes:
         try:
             return base64.b64decode(value)
         except ValueError:
-            raise RequestError(3102)
+            raise RequestError(3112)
 
 
 def _timedelta_converter(value: typing.Union[str, int]) -> datetime.timedelta:
@@ -42,7 +42,7 @@ def _plain_converter(converter: typing.Callable) -> typing.Callable:
     def main(value: typing.Any) -> typing.Any:
         if value is not None:
             return converter(value)
-        raise RequestError(3001)
+        raise RequestError(3101)
     return main
 
 
@@ -113,7 +113,7 @@ def wrap(endpoint: typing.Callable) -> typing.Callable:
             return endpoint(**converted)
         except TypeError:
             # Unexpected key word argument or missing required argument.
-            raise RequestError(3002)
+            raise RequestError(3102)
 
     return wrapped
 
