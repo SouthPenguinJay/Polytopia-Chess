@@ -15,7 +15,7 @@ import requests
 from .helpers import (
     RequestError, endpoint, interpret_integrity_error, paginate
 )
-from .. import config, emails, models
+from .. import emails, models
 
 
 def _validate_username(username: str):

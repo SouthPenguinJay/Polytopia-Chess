@@ -48,16 +48,7 @@ We will add more content to it as we set up.
         "email_address": "Display Name <address@domain.tld>"
      ```
 
-### 6: Add the host URL
-
-  1. This is the URL on which the server will be running. For development, this is likely to be `127.0.0.1:5000`. Note that this should be the outward facing address, not an address for the app to bind to.
-  2. Add this to the config file, eg:
-     ```
-         host_url: "127.0.0.1:5000"
-     ```
-     Note that you should not include a protocol (eg. `https://`). You should also not include a trailing comma, since this is the last line.
-
-### 7: Run the server
+### 6: Run the server
 
 Run `server/` as a Python module, eg. `python3 -m server`.
 

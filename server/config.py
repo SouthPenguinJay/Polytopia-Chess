@@ -24,8 +24,6 @@ SMTP_USERNAME = config.get('smtp_username', 'apikey')
 SMTP_PASSWORD = config['smtp_password']
 EMAIL_ADDRESS = config['email_address']
 
-HOST_URL = config['host_url']
-
 # Get the public/private key pair or generate if not found.
 _raw_key = config.get('private_key')
 
