@@ -2,6 +2,9 @@
 import discord
 from discord.ext import commands
 
+import polychess
+
+from ..tools import models
 from ..tools.checks import authenticated
 from ..tools.paginator import Paginator
 
@@ -15,7 +18,6 @@ class Accounts(commands.Cog):
     def __init__(self, bot: commands.Bot):
         """Store a reference to the bot."""
         self.bot = bot
-        self.bot.sessions = {}
 
     @commands.command(brief='Log in to your account.')
     @commands.dm_only()
@@ -24,8 +26,11 @@ class Accounts(commands.Cog):
 
         This must be run in DMs.
         """
+        if models.Session.get_by_ctx(ctx):
+            await ctx.send('You are already logged in.')
+            return
         session = self.bot.client.login(username, password)
-        self.bot.sessions[ctx.author.id] = session
+        models.Session.create_from_session(session, ctx.author.id)
         await ctx.send('Successful login.')
 
     @commands.command(brief='Log out of your account.')
@@ -33,7 +38,7 @@ class Accounts(commands.Cog):
     async def logout(self, ctx: Ctx):
         """Logout of your account."""
         ctx.session.logout()
-        del self.bot.sessions[ctx.author.id]
+        ctx.session_model.delete_instance()
         await ctx.send('Successful logout.')
 
     @commands.command(
@@ -51,9 +56,11 @@ class Accounts(commands.Cog):
     async def change_password(self, ctx: Ctx, *, password: str):
         """Change your password."""
         ctx.session.update(password=password)
-        self.bot.sessions[ctx.author.id] = self.bot.client.login(
+        ctx.session_model.delete_instance()
+        new_session = self.bot.client.login(
             ctx.user.username, password
         )
+        models.Session.create_from_session(new_session, ctx.author.id)
         await ctx.send('Changed password and logged in again.')
 
     @commands.command(brief='Change your email address.', name='change-email')
@@ -84,7 +91,7 @@ class Accounts(commands.Cog):
         )
         if 'yes'.startswith(response.content.lower()):
             ctx.session.delete()
-            del self.bot.sessions[ctx.author.id]
+            ctx.session_model.delete_instance()
             await ctx.send('Deleted your account.')
         else:
             await ctx.send('Cancelled.')
@@ -103,13 +110,13 @@ class Accounts(commands.Cog):
         if username:
             user = self.bot.client.get_user(username=username)
         else:
-            try:
-                user = self.bot.sessions[ctx.author.id].fetch_user()
-            except KeyError:
+            session_model = models.Session.get_by_ctx(ctx)
+            if not session_model:
                 await ctx.send(
                     'You are not logged in, please specify a user.'
                 )
                 return
+            user = session_model.get_session(ctx.bot.client).fetch_user()
         e = discord.Embed(title=user.username, timestamp=user.created_at)
         e.add_field(name='ELO', value=user.elo)
         e.add_field(name='ID', value=user.id)

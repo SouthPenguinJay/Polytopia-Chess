@@ -39,7 +39,7 @@ class Help(commands.DefaultHelpCommand):
     async def send_bot_help(self, cogs: typing.Dict[
             commands.Cog, typing.Iterable[
                 commands.Command
-            ]], description: str = ''):
+            ]], description: str = '​'):    # Default is ZWSP.
         """Send help for the entire bot."""
         self.context.help_command_check = True
         e = discord.Embed(

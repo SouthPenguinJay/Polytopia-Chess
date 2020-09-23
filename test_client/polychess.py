@@ -154,8 +154,8 @@ class Session:
 
     def __init__(self, client: Client, token: str, session_id: str):
         """Start the session."""
-        self._token = token
-        self._id = session_id
+        self.token = token
+        self.id = session_id
         self.client = client
 
     def _get_authenticated(
@@ -163,8 +163,8 @@ class Session:
             method: str = 'GET') -> Json:
         """Get an endpoint that requires authentication."""
         payload = payload or {}    # Avoid mutable parameter default.
-        payload['session_id'] = self._id
-        payload['session_token'] = self._token
+        payload['session_id'] = self.id
+        payload['session_token'] = self.token
         method = {
             'GET': requests.get,
             'DELETE': requests.delete
@@ -176,8 +176,8 @@ class Session:
             self, endpoint: str, payload: Json,
             method: str = 'POST', encrypted: bool = False) -> Json:
         """Post to an endpoint that requires authentication."""
-        payload['session_id'] = self._id
-        payload['session_token'] = self._token
+        payload['session_id'] = self.id
+        payload['session_token'] = self.token
         return self.client._post_payload(endpoint, payload, method, encrypted)
 
     def _invalidate_user_cache(self):
@@ -224,8 +224,8 @@ class Session:
             self, start_page: int, endpoint: str,
             **params: Json) -> Paginator:
         """Get a paginated list of games."""
-        params['session_id'] = self._id
-        params['session_token'] = self._token
+        params['session_id'] = self.id
+        params['session_token'] = self.token
         return Paginator(
             client=self.client,
             endpoint='/games/' + endpoint,
