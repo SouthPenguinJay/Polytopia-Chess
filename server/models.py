@@ -15,8 +15,7 @@ import peewee as pw
 import playhouse.postgres_ext as pw_postgres
 
 from . import config, gamemodes, timing
-from .endpoints import converters
-from .endpoints.helpers import RequestError
+from .endpoints import converters, helpers
 
 
 def hash_password(password: str) -> str:
@@ -217,7 +216,7 @@ class BaseModel(pw.Model):
         try:
             return cls.get(field == model_id)
         except cls.DoesNotExist:
-            raise RequestError(cls.PolyChessMeta.not_found_error)
+            raise helpers.RequestError(cls.PolyChessMeta.not_found_error)
 
 
 class User(BaseModel):
@@ -245,11 +244,11 @@ class User(BaseModel):
         try:
             user = cls.get(cls.username == username)
         except pw.DoesNotExist:
-            raise RequestError(1001)
+            raise helpers.RequestError(1001)
         if user.password != password:
-            raise RequestError(1302)
+            raise helpers.RequestError(1302)
         if user.email_verified:
-            raise RequestError(1307)
+            raise helpers.RequestError(1307)
         session = Session.create(user=user, token=token)
         return session
 
@@ -265,7 +264,8 @@ class User(BaseModel):
         Also clears all sessions.
         """
         self.password_hash = hash_password(password)
-        Session.delete().where(Session.user == self).execute()
+        if self.id:    # Will be None on initialisation.
+            Session.delete().where(Session.user == self).execute()
 
     @property
     def email(self) -> str:
@@ -321,7 +321,7 @@ class Session(BaseModel):
     def expired(self) -> bool:
         """Check if the session has expired."""
         age = datetime.datetime.now() - self.created_at
-        return age < Session.MAX_AGE
+        return age > Session.MAX_AGE
 
     def __str__(self) -> str:
         """Display as base 64."""
@@ -433,4 +433,4 @@ HostUser = User.alias()
 AwayUser = User.alias()
 InvitedUser = User.alias()
 
-db.create_tables([User, Game, Piece, GameState])
+db.create_tables([User, Session, Game, Piece, GameState])

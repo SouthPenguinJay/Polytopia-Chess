@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 import requests
 
 
-URL = 'https://127.0.0.1:5000'
+URL = 'http://127.0.0.1:5000'
 
 Json = typing.Dict[str, typing.Any]
 
@@ -76,7 +76,7 @@ class Client:
             self, endpoint: str, payload: Json, method: str = 'POST',
             encrypted: bool = False) -> Json:
         """Encrypt a payload and send it to the server."""
-        data = json.dumps(payload, separators=(',', ':'))
+        data = json.dumps(payload, separators=(',', ':')).encode()
         if encrypted:
             data = self._public_key.encrypt(
                 data,
@@ -96,7 +96,10 @@ class Client:
     def _handle_response(self, response: requests.Response) -> Json:
         """Handle a response from the server."""
         if response.ok:
-            return response.json()
+            if response.status_code == 204:
+                return {}
+            else:
+                return response.json()
         raise RequestError(response.json())
 
     @functools.cached_property
@@ -107,7 +110,14 @@ class Client:
 
     def login(self, username: str, password: str) -> Session:
         """Log in to an account."""
-        return Session(self, username, password)
+        token = base64.b64encode(os.urandom(32)).decode()
+        resp = self._post_payload('/accounts/login', {
+            'username': username,
+            'password': password,
+            'token': token
+        }, encrypted=True)
+        session_id = resp['session_id']
+        return Session(self, token, session_id)
 
     def get_user(self, username: str = None, id: int = None) -> User:
         """Get a user's account."""
@@ -119,9 +129,9 @@ class Client:
             resp = requests.get(URL + '/accounts/account', params={'id': id})
         return User(self, self._handle_response(resp))
 
-    def get_users(self) -> Paginator:
+    def get_users(self, start_page: int = 0) -> Paginator:
         """Get a list of all users."""
-        return Paginator(self, '/accounts/all', 'users', User)
+        return Paginator(self, '/accounts/all', 'users', User, start_page)
 
     def create_account(self, username: str, password: str, email: str):
         """Create a new user account."""
@@ -135,15 +145,10 @@ class Client:
 class Session:
     """An authenticated session."""
 
-    def __init__(self, client: Client, username: str, password: str):
+    def __init__(self, client: Client, token: str, session_id: str):
         """Start the session."""
-        self._token = base64.b64encode(os.urandom(32)).decode()
-        resp = client._post_encrypted_payload('/accounts/login', {
-            'username': username,
-            'password': password,
-            'token': self._token
-        })
-        self._session_id = resp['session_id']
+        self._token = token
+        self._id = session_id
         self.client = client
 
     def _get_authenticated(
@@ -151,7 +156,7 @@ class Session:
             method: str = 'GET') -> Json:
         """Get an endpoint that requires authentication."""
         payload = payload or {}    # Avoid mutable parameter default.
-        payload['session_id'] = self._session_id
+        payload['session_id'] = self._id
         payload['session_token'] = self._token
         method = {
             'GET': requests.get,
@@ -164,7 +169,7 @@ class Session:
             self, endpoint: str, payload: Json,
             method: str = 'POST', encrypted: bool = False) -> Json:
         """Post to an endpoint that requires authentication."""
-        payload['session_id'] = self._session_id
+        payload['session_id'] = self._id
         payload['session_token'] = self._token
         return self.client._post_payload(endpoint, payload, method, encrypted)
 
@@ -209,38 +214,41 @@ class Session:
         self._get_authenticated('/accounts/me', method='DELETE')
 
     def _get_games_paginator(
-            self, endpoint: str, **params: Json) -> Paginator:
+            self, start_page: int, endpoint: str,
+            **params: Json) -> Paginator:
         """Get a paginated list of games."""
-        params['session_id'] = self._session_id
+        params['session_id'] = self._id
         params['session_token'] = self._token
         return Paginator(
             client=self.client,
             endpoint='/games/' + endpoint,
             main_field='games',
             model=Game,
+            start_page=start_page,
             params=params,
             reference_fields={
                 'host': 'users', 'away': 'users', 'invited': 'users'
             }
         )
 
-    def get_common_completed_games(self, other: User) -> Paginator:
+    def get_common_completed_games(
+            self, other: User, start_page: int = 0) -> Paginator:
         """Get a list of games this user has in common with someone else."""
         return self._get_games_paginator(
-            'common_completed', account=other.username
+            'common_completed', start_page, account=other.username
         )
 
-    def get_invites(self) -> Paginator:
+    def get_invites(self, start_page: int = 0) -> Paginator:
         """Get a list of games this user has been invited to."""
-        return self._get_games_paginator('invites')
+        return self._get_games_paginator('invites', start_page)
 
-    def get_searches(self) -> Paginator:
+    def get_searches(self, start_page: int = 0) -> Paginator:
         """Get a list of outgoing game searches this user has."""
-        return self._get_games_paginator('searches')
+        return self._get_games_paginator('searches', start_page)
 
-    def get_ongoing(self) -> Paginator:
+    def get_ongoing(self, start_page: int = 0) -> Paginator:
         """Get a list of ongoing games this user is in."""
-        return self._get_games_paginator('ongoing')
+        return self._get_games_paginator('ongoing', start_page)
 
     def decline_invitation(self, invitation: Game):
         """Decline a game you have been invited to."""
@@ -330,15 +338,15 @@ class Paginator:
 
     def __init__(
             self, client: Client, endpoint: str, main_field: str,
-            model: typing.Any, params: Json = None,
+            model: typing.Any, start_page: int = 0, params: Json = None,
             reference_fields: typing.Dict[str, str] = None):
         """Initialise the paginator."""
         self.client = client
         self._page = None
-        self._page_number = 0
-        self._pages = None
+        self.page_number = start_page
+        self.pages = None
         self._index = 0
-        self._per_page = 100
+        self.per_page = 100
         self._endpoint = endpoint
         self._params = params or {}
         self._main_field = main_field
@@ -347,10 +355,10 @@ class Paginator:
 
     def _get_page(self):
         """Fetch the current page."""
-        self._params['page'] = self._page_number
+        self._params['page'] = self.page_number
         response = requests.get(URL + self._endpoint, params=self._params)
         raw = self.client._handle_response(response)
-        self._pages = raw['pages']
+        self.pages = raw['pages']
         self._page = []
         for data in raw[self._main_field]:
             for field in data:
@@ -363,9 +371,8 @@ class Paginator:
     def __iter__(self) -> Paginator:
         """Initialise this as an iterable."""
         self._index = 0
-        self._page_number = 0
         self._get_page()
-        self._per_page = len(self._page)
+        self.per_page = len(self._page)
         return self
 
     def __next__(self) -> User:
@@ -374,8 +381,8 @@ class Paginator:
             value = self._page[self._index]
             self._index += 1
             return value
-        elif self._page_number + 1 < self._pages:
-            self._page_number += 1
+        elif self.page_number + 1 < self.pages:
+            self.page_number += 1
             self._get_page()
             self._index = 1
             return self._page[0]
@@ -384,4 +391,4 @@ class Paginator:
 
     def __len__(self) -> int:
         """Calculate an aproximate for the number of users."""
-        return self._pages * self._per_page
+        return self.pages * self.per_page

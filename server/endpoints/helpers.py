@@ -1,6 +1,7 @@
 """Helpers for all endpoints."""
 from __future__ import annotations
 
+import base64
 import functools
 import json
 import math
@@ -116,12 +117,16 @@ def _process_request(
         session_token = data.pop('session_token')
     if bool(session_id) ^ bool(session_token):
         raise RequestError(1303)
-    elif session_id and session_token:
+    if session_id and session_token: 
+        try:
+            session_token = base64.b64decode(session_token)
+        except ValueError:
+            raise RequestError(3112)
         try:
             session = models.Session.get_by_id(session_id)
         except peewee.DoesNotExist:
             raise RequestError(1304)
-        if session_token != session.token:
+        if session_token != bytes(session.token):
             raise RequestError(1305)
         if session.expired:
             session.delete_instance()
@@ -131,13 +136,13 @@ def _process_request(
         data['user'] = user
     else:
         request.session = None
-    return {}
+    return data
 
 
 def endpoint(
         url: str, method: str,
         encrypt_request: bool = False,
-        raw_return: bool = True) -> typing.Callable:
+        raw_return: bool = False) -> typing.Callable:
     """Create a wrapper for an endpoint."""
     method = method.upper()
     if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
@@ -153,9 +158,11 @@ def endpoint(
         def return_wrapped(
                 **kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
             """Handle errors and convert the response to JSON."""
-            data = _process_request(flask.request, method, encrypt_request)
-            data.update(kwargs)
             try:
+                data = _process_request(
+                    flask.request, method, encrypt_request
+                )
+                data.update(kwargs)
                 response = converter_wrapped(**data)
             except RequestError as error:
                 response = error.as_dict
@@ -188,7 +195,7 @@ def get_public_key() -> str:
 @app.errorhandler(404)
 def not_found(error: typing.Any) -> flask.Response:
     """Handle an unkown URL being used."""
-    return flask.jsonify(RequestError(3301).as_dict)
+    return flask.jsonify(RequestError(3301).as_dict), 404
 
 
 @app.errorhandler(500)
@@ -196,4 +203,4 @@ def internal_error(error: Exception) -> flask.Response:
     """Handle an internal error."""
     traceback.print_tb(error.__traceback__)
     print(f'{type(error).__name__}: {error}')
-    return flask.jsonify(RequestError(4001).as_dict)
+    return flask.jsonify(RequestError(4001).as_dict), 500
