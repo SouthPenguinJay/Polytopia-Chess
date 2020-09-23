@@ -8,6 +8,8 @@ import functools
 import hashlib
 import hmac
 import os
+import random
+import string
 import typing
 
 import peewee as pw
@@ -35,12 +37,15 @@ def check_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(key, attempt_key)
 
 
-def generate_random_token(max_length: int) -> str:
-    """Generate a random token."""
-    # Divide max_length by 4 because os.urandom generates a series
-    # of bytes and we convert to base 64.
-    token = base64.b64encode(os.urandom(max_length // 4)).decode()
-    return token.replace('/', '_')    # It will be used in a URL.
+def generate_verification_token() -> str:
+    """Generate a verification token.
+
+    This will be 6 numbers or uppercase letters.
+    """
+    random.seed(os.urandom(32))
+    return ''.join(
+        random.choices(string.ascii_uppercase + string.digits, k=6)
+    )
 
 
 db = pw_postgres.PostgresqlExtDatabase(
@@ -225,7 +230,7 @@ class User(BaseModel):
     username = pw.CharField(max_length=32, unique=True)
     password_hash = pw.BlobField()
     _email = pw.CharField(max_length=255, unique=True, column_name='email')
-    email_verify_token = pw.CharField(max_length=128, null=True)
+    email_verify_token = pw.CharField(max_length=6, null=True)
     elo = pw.SmallIntegerField(default=1000)
     avatar = pw.BlobField(null=True)
     created_at = pw.DateTimeField(default=datetime.datetime.now)
@@ -247,7 +252,7 @@ class User(BaseModel):
             raise helpers.RequestError(1001)
         if user.password != password:
             raise helpers.RequestError(1302)
-        if user.email_verified:
+        if not user.email_verified:
             raise helpers.RequestError(1307)
         session = Session.create(user=user, token=token)
         return session
@@ -276,7 +281,7 @@ class User(BaseModel):
     def email(self, new_email: str):
         """Set the user's email and generate an email verification token."""
         self._email = new_email
-        self.email_verify_token = generate_random_token(128)
+        self.email_verify_token = generate_verification_token()
 
     @property
     def email_verified(self) -> bool:
@@ -287,7 +292,7 @@ class User(BaseModel):
     def email_verified(self, verified: bool):
         """Mark the user's email as verified."""
         if not verified:
-            self.email_verify_token = generate_random_token(128)
+            self.email_verify_token = generate_verification_token()
         else:
             self.email_verify_token = None
 

@@ -141,6 +141,13 @@ class Client:
             'email': email
         }, encrypted=True)
 
+    def verify_email(self, username: str, token: str):
+        """Verify an email address."""
+        resp = requests.get(URL + '/accounts/verify_email', params={
+            'username': username, 'token': token
+        })
+        self._handle_response(resp)
+
 
 class Session:
     """An authenticated session."""

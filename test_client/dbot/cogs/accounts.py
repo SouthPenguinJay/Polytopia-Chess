@@ -131,6 +131,15 @@ class Accounts(commands.Cog):
         self.bot.client.create_account(username, password, email)
         await ctx.send('Successfully created account.')
 
+    @commands.command(brief='Verify email address.', name='verify-email')
+    async def verify_email(self, ctx: Ctx, username: str, token: str):
+        """Verify your email address, using the token you were emailed.
+
+        Example: `{{pre}}verify-email Artemis INA43K`
+        """
+        self.bot.client.verify_email(username, token)
+        await ctx.send('Email address verified.')
+
     @commands.command(brief='See the leaderboard.', aliases=['lb'])
     async def leaderboard(self, ctx: Ctx, page: int = 1):
         """View the leaderboard.
