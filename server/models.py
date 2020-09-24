@@ -252,8 +252,6 @@ class User(BaseModel):
             raise helpers.RequestError(1001)
         if user.password != password:
             raise helpers.RequestError(1302)
-        if not user.email_verified:
-            raise helpers.RequestError(1307)
         session = Session.create(user=user, token=token)
         return session
 

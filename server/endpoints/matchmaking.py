@@ -16,7 +16,7 @@ _end_socket_session = lambda x, y: None      # noqa: E731
 #        CONNECT rather than GET.
 
 @models.db.atomic()
-@endpoint('/games/find', method='GET')
+@endpoint('/games/find', method='GET', require_verified_email=True)
 def find_game(
         user: models.User,
         main_thinking_time: datetime.timedelta,
@@ -45,7 +45,7 @@ def find_game(
 
 
 @models.db.atomic()
-@endpoint('/games/send_invitation', method='GET')
+@endpoint('/games/send_invitation', method='GET', require_verified_email=True)
 def send_invitation(
         user: models.User,
         invitee: models.User,
@@ -65,7 +65,7 @@ def send_invitation(
 
 
 @models.db.atomic()
-@endpoint('/games/invites/<game>', method='GET')
+@endpoint('/games/invites/<game>', method='GET', require_verified_email=True)
 def accept_invitation(user: models.User, game: models.Game):
     """Accept a game you have been invited to."""
     if game.invited != user:

@@ -98,7 +98,8 @@ def _decrypt_request(raw: bytes) -> typing.Dict[str, typing.Any]:
 
 def _process_request(
         request: flask.Request, method: str,
-        encrypt_request: bool) -> typing.Dict[str, typing.Any]:
+        encrypt_request: bool,
+        require_verified_email: bool) -> typing.Dict[str, typing.Any]:
     """Handle authentication and encryption."""
     if method in ('GET', 'CONNECT', 'DELETE'):
         data = dict(request.args)
@@ -133,6 +134,8 @@ def _process_request(
             raise RequestError(1306)
         request.session = session
         user = session.user
+        if require_verified_email and not user.email_verified:
+            raise RequestError(1307)
         data['user'] = user
     else:
         request.session = None
@@ -142,7 +145,8 @@ def _process_request(
 def endpoint(
         url: str, method: str,
         encrypt_request: bool = False,
-        raw_return: bool = False) -> typing.Callable:
+        raw_return: bool = False,
+        require_verified_email: bool = False) -> typing.Callable:
     """Create a wrapper for an endpoint."""
     method = method.upper()
     if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
@@ -160,7 +164,8 @@ def endpoint(
             """Handle errors and convert the response to JSON."""
             try:
                 data = _process_request(
-                    flask.request, method, encrypt_request
+                    flask.request, method, encrypt_request,
+                    require_verified_email
                 )
                 data.update(kwargs)
                 response = converter_wrapped(**data)
