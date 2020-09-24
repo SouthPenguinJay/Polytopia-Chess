@@ -2,8 +2,6 @@
 import discord
 from discord.ext import commands
 
-import polychess
-
 from ..tools import models
 from ..tools.checks import authenticated
 from ..tools.paginator import Paginator
@@ -157,6 +155,6 @@ class Accounts(commands.Cog):
         """
         users = self.bot.client.get_users(page - 1)
         await Paginator(
-            ctx, users, '`#{n:>3}` {item.username} - {item.elo}',
+            ctx, users, '`#{n:>3}` {item.username} - {item.elo}'.format,
             'Leaderboard'
         ).display_page()

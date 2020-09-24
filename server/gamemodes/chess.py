@@ -14,8 +14,8 @@ class Chess(gamemode.GameMode):
 
     def __init__(self, game: models.Game):
         """Store the game we are interested in."""
-        self.game = game
         self.hypothetical_moves = None
+        super().__init__(game)
 
     def layout_board(self):
         """Put the pieces on the board."""

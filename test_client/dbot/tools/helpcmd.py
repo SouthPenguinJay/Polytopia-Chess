@@ -5,6 +5,12 @@ import discord
 from discord.ext import commands
 
 
+DESCRIPTION_PLACEHOLDER = (
+    'Due to a Discord bug, we have to include placeholder text here. '
+    'Sorry about that.'
+)
+
+
 class Help(commands.DefaultHelpCommand):
     """The help command."""
 
@@ -39,7 +45,7 @@ class Help(commands.DefaultHelpCommand):
     async def send_bot_help(self, cogs: typing.Dict[
             commands.Cog, typing.Iterable[
                 commands.Command
-            ]], description: str = '​'):    # Default is ZWSP.
+            ]], description: str = DESCRIPTION_PLACEHOLDER):
         """Send help for the entire bot."""
         self.context.help_command_check = True
         e = discord.Embed(

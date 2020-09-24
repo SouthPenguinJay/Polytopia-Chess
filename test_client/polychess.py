@@ -22,12 +22,28 @@ URL = 'http://127.0.0.1:5000'
 Json = typing.Dict[str, typing.Any]
 
 
+def load_timestamp(seconds: int) -> datetime.datetime:
+    """Load a datetime from an int."""
+    if seconds is None:
+        return None
+    return datetime.datetime.fromtimestamp(seconds)
+
+
+def dump_timestamp(x: datetime.datetime) -> int:
+    """Convert a datetime to an int."""
+    return int(x.timestamp())
+
+
 def load_timedelta(seconds: int) -> datetime.timedelta:
     """Load a timedelta from an int."""
+    if seconds is None:
+        return None
     return datetime.timedelta(seconds=seconds)
 
 
-load_timestamp = datetime.datetime.fromtimestamp
+def dump_timedelta(x: datetime.timedelta) -> int:
+    """Convert a timedelta to an int."""
+    return int(x.total_seconds())
 
 
 class RequestError(Exception):
@@ -38,6 +54,12 @@ class RequestError(Exception):
         self.code = error['error']
         self.message = error['message']
         super().__init__(f'ERR{self.code}: {self.message}.')
+
+
+class Gamemode(enum.Enum):
+    """An enum for the mode of a game."""
+
+    CHESS = enum.auto()
 
 
 class Winner(enum.Enum):
@@ -119,15 +141,22 @@ class Client:
         session_id = resp['session_id']
         return Session(self, token, session_id)
 
-    def get_user(self, username: str = None, id: int = None) -> User:
+    def get_user(self, username: str = None, user_id: int = None) -> User:
         """Get a user's account."""
         if not bool(username) ^ bool(id):
             raise TypeError('Exactly one of username or id should be passed.')
         if username:
             resp = requests.get(URL + '/user/' + username)
         else:
-            resp = requests.get(URL + '/accounts/account', params={'id': id})
+            resp = requests.get(
+                URL + '/accounts/account', params={'id': user_id}
+            )
         return User(self, self._handle_response(resp))
+
+    def get_game(self, game_id: int) -> Game:
+        """Get a game by ID."""
+        resp = requests.get(URL + '/games/' + str(game_id))
+        return Game(self, self._handle_response(resp))
 
     def get_users(self, start_page: int = 0) -> Paginator:
         """Get a list of all users."""
@@ -221,7 +250,7 @@ class Session:
         self._get_authenticated('/accounts/me', method='DELETE')
 
     def _get_games_paginator(
-            self, start_page: int, endpoint: str,
+            self, endpoint: str, start_page: int,
             **params: Json) -> Paginator:
         """Get a paginated list of games."""
         params['session_id'] = self.id
@@ -257,13 +286,53 @@ class Session:
         """Get a list of ongoing games this user is in."""
         return self._get_games_paginator('ongoing', start_page)
 
+    # FIXME: Once sockets are implemented, the following three methods should
+    #        be CONNECT rather than GET.
+
+    def find_game(
+            self,
+            main_thinking_time: datetime.timedelta,
+            fixed_extra_time: datetime.timedelta,
+            time_increment_per_turn: datetime.timedelta, mode: Gamemode):
+        """Look for or create a game."""
+        self._get_authenticated(
+            '/games/find', {
+                'main_thinking_time': dump_timedelta(main_thinking_time),
+                'fixed_extra_time': dump_timedelta(fixed_extra_time),
+                'time_increment_per_turn': dump_timedelta(
+                    time_increment_per_turn
+                ),
+                'mode': mode.value
+            }
+        )
+
+    def send_invitation(
+            self, other: User,
+            main_thinking_time: datetime.timedelta,
+            fixed_extra_time: datetime.timedelta,
+            time_increment_per_turn: datetime.timedelta, mode: Gamemode):
+        """Send an invitation to another user."""
+        self._get_authenticated(
+            '/games/send_invitation', {
+                'invitee': other.username,
+                'main_thinking_time': dump_timedelta(main_thinking_time),
+                'fixed_extra_time': dump_timedelta(fixed_extra_time),
+                'time_increment_per_turn': dump_timedelta(
+                    time_increment_per_turn
+                ),
+                'mode': mode.value
+            }
+        )
+
+    def accept_inivitation(self, invitation: Game):
+        """Accept a game you have been invited to."""
+        self._get_authenticated('/games/invites/' + str(invitation.id))
+
     def decline_invitation(self, invitation: Game):
         """Decline a game you have been invited to."""
         self._get_authenticated(
             '/games/invites/' + str(invitation.id), method='DELETE'
         )
-
-    # TODO: Implement sockets
 
 
 class User:
@@ -308,32 +377,29 @@ class Game:
         """Load the game attributes."""
         self.client = client
         self.id = data['id']
-        self.mode = data['mode']
+        self.mode = Gamemode(data['mode'])
+        self.host = User(client, data['host']) if data['host'] else None
+        self.away = User(client, data['away']) if data['away'] else None
+        self.invited = (
+            User(client, data['invited']) if data['invited'] else None
+        )
+        self.current_turn = Side(data['current_turn'])
+        self.turn_number = data['turn_number']
         self.main_thinking_time = load_timedelta(data['main_thinking_time'])
         self.fixed_extra_time = load_timedelta(data['fixed_extra_time'])
         self.time_increment_per_turn = load_timedelta(
             data['time_increment_per_turn']
         )
-        self.host = data.get('host')
-        self.started = 'started_at' in data
-        self.ongoing = 'last_turn' in data
-        self.ended = 'ended_at' in data
-        self.is_invitation = 'invited' in data
-        if self.started:
-            self.started_at = load_timestamp(data['started_at'])
-            self.away = data.get('away')
-        else:
-            self.opened_at = load_timestamp(data['opened_at'])
-        if self.is_invitation:
-            self.invited = data['invited']
-        if self.ended:
-            self.ended_at = load_timestamp(data['ended_at'])
-            self.conclusion_type = Conclusion(data['conclusion_type'])
-            self.winner = Side(data['winner'])
-        if self.ongoing:
-            self.last_turn = load_timestamp(data['last_turn'])
-            self.turn_number = data['turn_number']
-            self.current_turn = Side(data['current_turn'])
+        self.home_time = load_timedelta(data['home_time'])
+        self.away_time = load_timedelta(data['away_time'])
+        self.home_offering_draw = data['home_offering_draw']
+        self.away_offering_draw = data['away_offering_draw']
+        self.winner = Winner(data['winner'])
+        self.conclusion_type = Conclusion(data['conclusion_type'])
+        self.opened_at = load_timestamp(data['opened_at'])
+        self.started_at = load_timestamp(data['started_at'])
+        self.last_turn = load_timestamp(data['last_turn'])
+        self.ended_at = load_timestamp(data['ended_at'])
 
     def __eq__(self, other: Game) -> bool:
         """Check if another instance refers to the same game."""
@@ -370,9 +436,10 @@ class Paginator:
         for data in raw[self._main_field]:
             for field in data:
                 if field in self._reference_fields:
-                    data[field] = raw[
-                        self._reference_fields[field]
-                    ][data[field]]
+                    if data[field]:
+                        data[field] = raw[
+                            self._reference_fields[field]
+                        ][str(data[field])]
             self._page.append(self._model(self.client, data))
 
     def __iter__(self) -> Paginator:
@@ -384,7 +451,7 @@ class Paginator:
 
     def __next__(self) -> User:
         """Get the next user."""
-        if self._index + 1 < len(self._page):
+        if self._index < len(self._page):
             value = self._page[self._index]
             self._index += 1
             return value

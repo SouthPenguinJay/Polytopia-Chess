@@ -1,4 +1,6 @@
 """Display paginated responses from the API in Discord."""
+import typing
+
 import discord
 from discord.ext import commands
 
@@ -10,7 +12,7 @@ class Paginator:
 
     def __init__(
             self, ctx: commands.Context, response: polychess.Paginator,
-            fmt: str, title: str):
+            fmt: typing.Callable, title: str):
         """Set up the paginator."""
         self.ctx = ctx
         self.response = response
@@ -23,7 +25,7 @@ class Paginator:
         """Display the current page."""
         lines = []
         for n, item in zip(range(self.response.per_page), self.response):
-            lines.append(self.format.format(n=n + 1, item=item))
+            lines.append(self.format(n=n + 1, item=item))
         desc = '\n'.join(lines) or '*There\'s nothing here.*'
         e = discord.Embed(title=self.title, description=desc)
         e.set_footer(

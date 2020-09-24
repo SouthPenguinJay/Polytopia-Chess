@@ -117,7 +117,7 @@ def _process_request(
         session_token = data.pop('session_token')
     if bool(session_id) ^ bool(session_token):
         raise RequestError(1303)
-    if session_id and session_token: 
+    if session_id and session_token:
         try:
             session_token = base64.b64decode(session_token)
         except ValueError:
@@ -150,11 +150,11 @@ def endpoint(
     if encrypt_request and method not in ('POST', 'PATCH'):
         raise RuntimeError('Cannot encrypt bodyless request.')
 
-    def wrapper(endpoint: typing.Callable) -> typing.Callable:
+    def wrapper(main: typing.Callable) -> typing.Callable:
         """Wrap an endpoint."""
-        converter_wrapped = converters.wrap(endpoint)
+        converter_wrapped = converters.wrap(main)
 
-        @functools.wraps(endpoint)
+        @functools.wraps(main)
         def return_wrapped(
                 **kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
             """Handle errors and convert the response to JSON."""
@@ -193,7 +193,7 @@ def get_public_key() -> str:
 
 
 @app.errorhandler(404)
-def not_found(error: typing.Any) -> flask.Response:
+def not_found(_error: typing.Any) -> flask.Response:
     """Handle an unkown URL being used."""
     return flask.jsonify(RequestError(3301).as_dict), 404
 

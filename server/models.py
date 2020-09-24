@@ -361,7 +361,7 @@ class Game(BaseModel):
     # amount timer is incremented after each turn
     time_increment_per_turn = pw_postgres.IntervalField()
 
-    # timers at the start of the current turn, null means starting_time
+    # timers at the start of the current turn, null means main_thinking_time
     home_time = pw_postgres.IntervalField(null=True)
     away_time = pw_postgres.IntervalField(null=True)
 
@@ -408,6 +408,41 @@ class Game(BaseModel):
         initialisation in some cases.
         """
         return gamemodes.GAMEMODES[self.mode - 1](self)
+
+    def to_json(self) -> typing.Dict[str, typing.Any]:
+        """Get a dict representation of this game."""
+        return {
+            'id': self.id,
+            'mode': self.mode,
+            'host': self.host.to_json() if self.host else None,
+            'away': self.away.to_json() if self.away else None,
+            'invited': self.invited.to_json() if self.invited else None,
+            'current_turn': self.current_turn.value,
+            'turn_number': int(self.turn_number),
+            'main_thinking_time': self.main_thinking_time.total_seconds(),
+            'fixed_extra_time': self.fixed_extra_time.total_seconds(),
+            'time_increment_per_turn': (
+                self.time_increment_per_turn.total_seconds()
+            ),
+            'home_time': (
+                self.home_time or self.main_thinking_time
+            ).total_seconds(),
+            'away_time': (
+                self.away_time or self.main_thinking_time
+            ).total_seconds(),
+            'home_offering_draw': self.home_offering_draw,
+            'away_offering_draw': self.away_offering_draw,
+            'winner': self.winner.value,
+            'conclusion_type': self.conclusion_type.value,
+            'opened_at': self.opened_at.timestamp(),
+            'started_at': (
+                self.started_at.timestamp() if self.started_at else None
+            ),
+            'last_turn': (
+                self.last_turn.timestamp() if self.last_turn else None
+            ),
+            'ended_at': self.ended_at.timestamp() if self.ended_at else None
+        }
 
 
 class Piece(BaseModel):
