@@ -75,22 +75,28 @@ class Chess(gamemode.GameMode):
         victim = self.get_piece(rank, file)
         return victim.side != piece.side
 
+    def on_board(self, rank: int, file: int) -> bool:
+        """Check if valid square i.e. rank and file on board."""
+        return (
+            rank >= 0 and rank <= 7
+            and file >= 0 and file <= 7
+        )
+
     def get_moves_in_direction(
             self, piece: models.Piece, rank_direction: int,
             file_direction: int) -> typing.Iterator[int, int]:
         """Get all moves for a unit in a direction."""
         rank, file = piece.rank, piece.file
         while True:
-            file += file_direction
             rank += rank_direction
-            target = self.get_piece(rank, file)
-            if target:
-                if target.side == piece.side:
-                    break
-                yield rank, file
+            file += file_direction
+            if not self.on_board(rank, file):
                 break
-            else:
+            target = self.get_piece(rank, file)
+            if (not target) or (target.side != piece.side):
                 yield rank, file
+            if target:
+                break
 
     def hypothetical_check(
             self, side: models.Side,
@@ -161,31 +167,12 @@ class Chess(gamemode.GameMode):
 
     def get_pawn_moves(self, pawn: models.Piece) -> typing.Iterator[int, int]:
         """Get all possible moves for a pawn."""
-        in_front = self.get_piece(pawn.rank + pawn.side.forwards, pawn.file)
-        if not in_front:
-            yield pawn.file, pawn.rank + pawn.side.forwards
-        if (not pawn.has_moved) and not in_front:
-            two_in_front = self.get_piece(
-                pawn.rank + pawn.side.forwards * 2, pawn.file
-            )
-            if not two_in_front:
-                yield pawn.file, pawn.rank + pawn.side.forwards * 2
-        for direction in (-1, 1):
-            file = pawn.file + direction
-            rank = pawn.rank + pawn.side.forwards
-            target = self.get_piece(rank, file)
-            if not target:
-                en_passant_pawn = self.get_piece(pawn.rank, file)
-                en_passant_valid = (
-                    en_passant_pawn and en_passant_pawn.side != pawn.side
-                    and en_passant_pawn.first_move_last_turn
-                    and pawn.rank == (
-                        4 if pawn.side == models.Side.HOME else 3
-                    )
-                )
-                if en_passant_valid:
-                    yield rank, file
-            if target and target.side != pawn.side:
+        options = ((1, 0), (2, 0), (1, -1), (1, 1))
+        for absolute_rank_delta, file_delta in options:
+            rank = pawn.rank + absolute_rank_delta * pawn.side.forwards
+            file = pawn.file + file_delta
+            if (self.on_board(rank, file)
+                    and self.validate_pawn_move(pawn, rank, file)):
                 yield rank, file
 
     def validate_rook_move(
@@ -299,35 +286,6 @@ class Chess(gamemode.GameMode):
             return True
         return False
 
-    def get_allowed_castling(self, king: models.Piece) -> typing.List[
-            typing.Tuple[models.Piece.Rook, int], ...]:
-        """Get a list of rooks the king is allowed to castle with.
-
-        Also returns which file it would move to in each case.
-        """
-        if king.has_moved:
-            return []
-        options = ((0, 3, 2, (1, 2, 3)), (7, 5, 6, (5, 6)))
-        castling_moves = []
-        for rook_start, rook_end, king_end, empty_files in options:
-            rook = self.get_piece(king.rank, rook_start)
-            if (not rook) or rook.has_moved:
-                continue
-            empty_squares_empty = True
-            for empty_file in empty_files:
-                if not self.get_piece(king.rank, empty_file):
-                    empty_squares_empty = False
-                    break
-            if not empty_squares_empty:
-                continue
-            valid = not self.hypothetical_check(
-                king.side, (king, king.rank, king_end),
-                (rook, king.rank, rook_end)
-            )
-            if valid:
-                castling_moves.append((rook, king_end))
-        return castling_moves
-
     def get_king_moves(self, king: models.Piece) -> typing.Iterator[int, int]:
         """Get all possible moves for a king."""
         for file_direction in (-1, 0, 1):
@@ -337,11 +295,15 @@ class Chess(gamemode.GameMode):
                     continue
                 rank = king.rank + rank_direction
                 file = king.file + file_direction
+                if not self.on_board(file, rank):
+                    continue
                 victim = self.get_piece(rank, file)
                 if (not victim) or (victim.side != king.side):
                     yield rank, file
-        for _rook, king_file in self.get_allowed_castling(king):
-            yield king.rank, king_file
+        if not king.has_moved:
+            for file_direction in (-2, 2):
+                file = king.file + file_direction
+                self.validate_king_move(king, king.rank, file)
 
     def validate_move(
             self, start_rank: int, start_file: int, end_rank: int,
@@ -349,14 +311,10 @@ class Chess(gamemode.GameMode):
         """Validate a move."""
         if start_file == end_file and start_rank == end_rank:
             return False
-        out_of_board = (
-            (end_file < 0) or (end_file > 7)
-            or (end_rank < 0) or (end_rank > 7)
-        )
-        if out_of_board:
-            return False
         piece = self.get_piece(start_rank, start_file)
         if not piece:
+            return False
+        if not self.on_board(end_rank, end_file):
             return False
         validators = {
             models.PieceType.PAWN: self.validate_pawn_move,
