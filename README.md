@@ -11,7 +11,7 @@ Python can be installed from the [official website](https://www.python.org/downl
 
 ### 2: Install dependencies from PyPI
 
-This may be as simple as `pip install -r server/requirements.txt`, but depending on your setup you may need to replace `pip` with `pip3`, `py -m pip`, `py3 -m pip`, `python3 -m pip`, `python3.8 -m pip`...
+This may be as simple as `pip install -r server/requirements.txt -U`, but depending on your setup you may need to replace `pip` with `pip3`, `py -m pip`, `py3 -m pip`, `python3 -m pip`, `python3.8 -m pip`...
 
 ### 3: Create a config file
 
