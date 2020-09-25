@@ -18,7 +18,7 @@ with open(config_file) as f:
     config = json.load(f)
 
 bot = commands.Bot(command_prefix=config['prefix'], help_command=Help())
-bot.client = polychess.Client()
+bot.client = polychess.Client(config['api_url'])
 for cog in COGS:
     bot.add_cog(cog(bot))
 
