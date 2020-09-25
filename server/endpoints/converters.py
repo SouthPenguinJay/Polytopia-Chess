@@ -7,13 +7,15 @@ import typing
 
 import peewee
 
+from . import helpers
+
 
 def _int_converter(value: typing.Union[str, int]) -> int:
     """Convert an integer parameter."""
     try:
         return int(value)
     except ValueError:
-        raise RequestError(3101)
+        raise helpers.RequestError(3111)
 
 
 def _bytes_converter(value: typing.Union[str, bytes]) -> bytes:
@@ -24,7 +26,7 @@ def _bytes_converter(value: typing.Union[str, bytes]) -> bytes:
         try:
             return base64.b64decode(value)
         except ValueError:
-            raise RequestError(3102)
+            raise helpers.RequestError(3112)
 
 
 def _timedelta_converter(value: typing.Union[str, int]) -> datetime.timedelta:
@@ -42,7 +44,7 @@ def _plain_converter(converter: typing.Callable) -> typing.Callable:
     def main(value: typing.Any) -> typing.Any:
         if value is not None:
             return converter(value)
-        raise RequestError(3001)
+        raise helpers.RequestError(3101)
     return main
 
 
@@ -100,7 +102,7 @@ def wrap(endpoint: typing.Callable) -> typing.Callable:
     def wrapped(**kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         """Convert arguments before calling the endpoint."""
         if authenticated and not kwargs.get('user'):
-            raise RequestError(1301)
+            raise helpers.RequestError(1301)
         elif kwargs.get('user') and not authenticated:
             del kwargs['user']
         converted = {}
@@ -113,9 +115,6 @@ def wrap(endpoint: typing.Callable) -> typing.Callable:
             return endpoint(**converted)
         except TypeError:
             # Unexpected key word argument or missing required argument.
-            raise RequestError(3002)
+            raise helpers.RequestError(3102)
 
     return wrapped
-
-
-from .helpers import RequestError    # noqa: E402 - Avoid circular import.

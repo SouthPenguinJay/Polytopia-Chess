@@ -1,11 +1,13 @@
 """Helpers for all endpoints."""
 from __future__ import annotations
 
+import base64
 import functools
 import json
 import math
 import pathlib
 import re
+import traceback
 import typing
 
 from cryptography.hazmat.primitives import hashes
@@ -85,18 +87,19 @@ def _decrypt_request(raw: bytes) -> typing.Dict[str, typing.Any]:
             )
         )
     except ValueError:
-        raise RequestError(3003)
+        raise RequestError(3113)
     try:
         return json.loads(raw_json.decode())
     except json.JSONDecodeError:
-        raise RequestError(3103)
+        raise RequestError(3113)
     except UnicodeDecodeError:
-        raise RequestError(3103)
+        raise RequestError(3113)
 
 
 def _process_request(
         request: flask.Request, method: str,
-        encrypt_request: bool) -> typing.Dict[str, typing.Any]:
+        encrypt_request: bool,
+        require_verified_email: bool) -> typing.Dict[str, typing.Any]:
     """Handle authentication and encryption."""
     if method in ('GET', 'CONNECT', 'DELETE'):
         data = dict(request.args)
@@ -106,7 +109,7 @@ def _process_request(
         else:
             data = request.get_json(force=True, silent=True)
         if not isinstance(data, dict):
-            raise RequestError(3103)
+            raise RequestError(3113)
     session_id = None
     session_token = None
     if 'session_id' in data:
@@ -115,28 +118,35 @@ def _process_request(
         session_token = data.pop('session_token')
     if bool(session_id) ^ bool(session_token):
         raise RequestError(1303)
-    elif session_id and session_token:
+    if session_id and session_token:
+        try:
+            session_token = base64.b64decode(session_token)
+        except ValueError:
+            raise RequestError(3112)
         try:
             session = models.Session.get_by_id(session_id)
         except peewee.DoesNotExist:
             raise RequestError(1304)
-        if session_token != session.token:
+        if session_token != bytes(session.token):
             raise RequestError(1305)
         if session.expired:
             session.delete_instance()
             raise RequestError(1306)
         request.session = session
         user = session.user
+        if require_verified_email and not user.email_verified:
+            raise RequestError(1307)
         data['user'] = user
     else:
         request.session = None
-    return {}
+    return data
 
 
 def endpoint(
         url: str, method: str,
         encrypt_request: bool = False,
-        raw_return: bool = True) -> typing.Callable:
+        raw_return: bool = False,
+        require_verified_email: bool = False) -> typing.Callable:
     """Create a wrapper for an endpoint."""
     method = method.upper()
     if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
@@ -144,17 +154,20 @@ def endpoint(
     if encrypt_request and method not in ('POST', 'PATCH'):
         raise RuntimeError('Cannot encrypt bodyless request.')
 
-    def wrapper(endpoint: typing.Callable) -> typing.Callable:
+    def wrapper(main: typing.Callable) -> typing.Callable:
         """Wrap an endpoint."""
-        converter_wrapped = converters.wrap(endpoint)
+        converter_wrapped = converters.wrap(main)
 
-        @functools.wraps(endpoint)
+        @functools.wraps(main)
         def return_wrapped(
                 **kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
             """Handle errors and convert the response to JSON."""
-            data = _process_request(flask.request, method, encrypt_request)
-            data.update(kwargs)
             try:
+                data = _process_request(
+                    flask.request, method, encrypt_request,
+                    require_verified_email
+                )
+                data.update(kwargs)
                 response = converter_wrapped(**data)
             except RequestError as error:
                 response = error.as_dict
@@ -170,8 +183,7 @@ def endpoint(
                 )
             else:
                 response = flask.jsonify(response or {})
-                response.status_code = code
-                return response
+                return response, code
 
         flask_wrapped = app.route(url, methods=[method])(return_wrapped)
         return flask_wrapped
@@ -183,3 +195,17 @@ def endpoint(
 def get_public_key() -> str:
     """Get our public RSA key."""
     return config.PUBLIC_KEY
+
+
+@app.errorhandler(404)
+def not_found(_error: typing.Any) -> flask.Response:
+    """Handle an unkown URL being used."""
+    return flask.jsonify(RequestError(3301).as_dict), 404
+
+
+@app.errorhandler(500)
+def internal_error(error: Exception) -> flask.Response:
+    """Handle an internal error."""
+    traceback.print_tb(error.__traceback__)
+    print(f'{type(error).__name__}: {error}')
+    return flask.jsonify(RequestError(4001).as_dict), 500

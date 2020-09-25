@@ -15,7 +15,7 @@ import requests
 from .helpers import (
     RequestError, endpoint, interpret_integrity_error, paginate
 )
-from .. import config, emails, models
+from .. import emails, models
 
 
 def _validate_username(username: str):
@@ -72,9 +72,13 @@ def _validate_email(email: str):
 
 @models.db.atomic()
 @endpoint('/accounts/login', method='POST', encrypt_request=True)
-def login(username: str, password: str, token: bytes):
+def login(
+        username: str, password: str, token: bytes) -> typing.Dict[str, int]:
     """Create a new authentication session."""
-    models.User.login(username, password, token)
+    if len(token) != 32:
+        raise RequestError(1308)
+    session = models.User.login(username, password, token)
+    return {'session_id': session.id}
 
 
 @models.db.atomic()
@@ -111,16 +115,15 @@ def send_verification_email(user: models.User):
     """Send a verification email to a user."""
     if user.email_verified:
         raise RequestError(1201)
-    path = flask.url_for(
-        'verify_email', username=user.username, token=user.email_verify_token
+    message = (
+        f'Here is the code to verify your email address: '
+        f'{user.email_verify_token}.'
     )
-    url = f'https://' + config.HOST_URL + path
-    message = f'Please click here to verify your email address: {url}.'
     emails.send_email(user.email, message, 'Polychess email verification')
 
 
 @models.db.atomic()
-@endpoint('/accounts/verify_email/<username>/<token>', method='GET')
+@endpoint('/accounts/verify_email', method='GET')
 def verify_email(username: str, token: str):
     """Verify an email address."""
     try:
@@ -163,9 +166,27 @@ def update_account(
             send_verification_email(user=user)
 
 
+@endpoint('/accounts/me', method='GET')
+def get_own_account(user: models.User) -> typing.Dict[str, typing.Any]:
+    """Get the user's own account."""
+    data = user.to_json()
+    data['email'] = user.email
+    return data
+
+
 @endpoint('/user/<account>', method='GET')
 def get_account(account: models.User) -> typing.Dict[str, typing.Any]:
     """Get a user account."""
+    return account.to_json()
+
+
+@endpoint('/accounts/account', method='GET')
+def get_account_by_id(id: int) -> typing.Dict[str, typing.Any]:
+    """Get a user account by ID."""
+    try:
+        account = models.User.get_by_id(id)
+    except peewee.DoesNotExist:
+        raise RequestError(1001)
     return account.to_json()
 
 

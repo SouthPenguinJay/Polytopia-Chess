@@ -4,7 +4,6 @@ This module does not handle encryption, or socket requests, eg. making moves,
 sending game invitations, etc.
 """
 import datetime
-import enum
 import typing
 
 import peewee
@@ -24,8 +23,7 @@ def td(x: datetime.timedelta) -> int:
 
 
 def _get_list_of_games(
-        conditions: typing.Tuple[peewee.Query], page: int,
-        *fields: typing.Tuple[str]) -> typing.List[
+        conditions: typing.Tuple[peewee.Query], page: int) -> typing.List[
             typing.Dict[str, typing.Any]]:
     """Get some list of games including given fields."""
     games = []
@@ -46,30 +44,13 @@ def _get_list_of_games(
     query, pages = paginate(query, page)
     users = {}
     for game in query:
-        dumped = {
-            'id': game.id,
-            'mode': game.mode,
-            'main_thinking_time': td(game.main_thinking_time),
-            'fixed_extra_time': td(game.fixed_extra_time),
-            'time_increment_per_turn': td(game.time_increment_per_turn)
-        }
-        if game.started_at:
-            dumped['started_at'] = dt(game.started_at)
-        else:
-            dumped['opened_at'] = dt(game.opened_at)
+        dumped = game.to_json()
         for user_field in ('host', 'away', 'invited'):
-            user = getattr(game, user_field)
+            user = dumped[user_field]
             if user:
-                dumped[user_field] = user.id
-                if user.id not in users:
-                    users[user.id] = user.to_json()
-        for field in fields:
-            value = getattr(game, field)
-            if isinstance(value, datetime.datetime):
-                value = dt(value)
-            elif isinstance(value, enum.Enum):
-                value = int(value)
-            dumped[field] = value
+                dumped[user_field] = user['id']
+                if user['id'] not in users:
+                    users[user['id']] = user
         games.append(dumped)
     return {
         'games': games,
@@ -93,8 +74,7 @@ def get_outgoing_searches(
         (
             models.Game.host == user,
             models.Game.started_at == None    # noqa: E711
-        ),
-        page
+        ), page
     )
 
 
@@ -107,8 +87,7 @@ def get_ongoing_games(
             (models.Game.host == user) | (models.Game.away == user),
             models.Game.started_at != None,    # noqa: E711
             models.Game.ended_at == None    # noqa: E711
-        ),
-        page, 'last_turn'
+        ), page
     )
 
 
@@ -120,8 +99,7 @@ def get_completed_games(
         (
             (models.Game.host == account) | (models.Game.away == account),
             models.Game.ended_at != None    # noqa: E711
-        ),
-        page, 'ended_at', 'conclusion_type'
+        ), page
     )
 
 
@@ -137,6 +115,11 @@ def get_common_completed_games(
                 | (models.Game.host == account) & (models.Game.away == user)
             ),
             models.Game.ended_at != None    # noqa: E711
-        ),
-        page, 'ended_at', 'conclusion_type'
+        ), page
     )
+
+
+@endpoint('/games/<int:game>', method='GET')
+def get_game(game: models.Game) -> typing.Dict[str, typing.Any]:
+    """Get a game by ID."""
+    return game.to_json()

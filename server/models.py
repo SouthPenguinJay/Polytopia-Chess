@@ -8,6 +8,8 @@ import functools
 import hashlib
 import hmac
 import os
+import random
+import string
 import typing
 
 import peewee as pw
@@ -15,8 +17,7 @@ import peewee as pw
 import playhouse.postgres_ext as pw_postgres
 
 from . import config, gamemodes, timing
-from .endpoints import converters
-from .endpoints.helpers import RequestError
+from .endpoints import converters, helpers
 
 
 def hash_password(password: str) -> str:
@@ -36,12 +37,15 @@ def check_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(key, attempt_key)
 
 
-def generate_random_token(max_length: int) -> str:
-    """Generate a random token."""
-    # Divide max_length by 4 because os.urandom generates a series
-    # of bytes and we convert to base 64.
-    token = base64.b64encode(os.urandom(max_length // 4)).decode()
-    return token.replace('/', '_')    # It will be used in a URL.
+def generate_verification_token() -> str:
+    """Generate a verification token.
+
+    This will be 6 numbers or uppercase letters.
+    """
+    random.seed(os.urandom(32))
+    return ''.join(
+        random.choices(string.ascii_uppercase + string.digits, k=6)
+    )
 
 
 db = pw_postgres.PostgresqlExtDatabase(
@@ -217,7 +221,7 @@ class BaseModel(pw.Model):
         try:
             return cls.get(field == model_id)
         except cls.DoesNotExist:
-            raise RequestError(cls.PolyChessMeta.not_found_error)
+            raise helpers.RequestError(cls.PolyChessMeta.not_found_error)
 
 
 class User(BaseModel):
@@ -226,7 +230,7 @@ class User(BaseModel):
     username = pw.CharField(max_length=32, unique=True)
     password_hash = pw.BlobField()
     _email = pw.CharField(max_length=255, unique=True, column_name='email')
-    email_verify_token = pw.CharField(max_length=128, null=True)
+    email_verify_token = pw.CharField(max_length=6, null=True)
     elo = pw.SmallIntegerField(default=1000)
     avatar = pw.BlobField(null=True)
     created_at = pw.DateTimeField(default=datetime.datetime.now)
@@ -245,11 +249,9 @@ class User(BaseModel):
         try:
             user = cls.get(cls.username == username)
         except pw.DoesNotExist:
-            raise RequestError(1001)
+            raise helpers.RequestError(1001)
         if user.password != password:
-            raise RequestError(1302)
-        if user.email_verified:
-            raise RequestError(1307)
+            raise helpers.RequestError(1302)
         session = Session.create(user=user, token=token)
         return session
 
@@ -265,7 +267,8 @@ class User(BaseModel):
         Also clears all sessions.
         """
         self.password_hash = hash_password(password)
-        Session.delete().where(Session.user == self).execute()
+        if self.id:    # Will be None on initialisation.
+            Session.delete().where(Session.user == self).execute()
 
     @property
     def email(self) -> str:
@@ -276,7 +279,7 @@ class User(BaseModel):
     def email(self, new_email: str):
         """Set the user's email and generate an email verification token."""
         self._email = new_email
-        self.email_verify_token = generate_random_token(128)
+        self.email_verify_token = generate_verification_token()
 
     @property
     def email_verified(self) -> bool:
@@ -287,7 +290,7 @@ class User(BaseModel):
     def email_verified(self, verified: bool):
         """Mark the user's email as verified."""
         if not verified:
-            self.email_verify_token = generate_random_token(128)
+            self.email_verify_token = generate_verification_token()
         else:
             self.email_verify_token = None
 
@@ -321,7 +324,7 @@ class Session(BaseModel):
     def expired(self) -> bool:
         """Check if the session has expired."""
         age = datetime.datetime.now() - self.created_at
-        return age < Session.MAX_AGE
+        return age > Session.MAX_AGE
 
     def __str__(self) -> str:
         """Display as base 64."""
@@ -356,7 +359,7 @@ class Game(BaseModel):
     # amount timer is incremented after each turn
     time_increment_per_turn = pw_postgres.IntervalField()
 
-    # timers at the start of the current turn, null means starting_time
+    # timers at the start of the current turn, null means main_thinking_time
     home_time = pw_postgres.IntervalField(null=True)
     away_time = pw_postgres.IntervalField(null=True)
 
@@ -404,6 +407,41 @@ class Game(BaseModel):
         """
         return gamemodes.GAMEMODES[self.mode - 1](self)
 
+    def to_json(self) -> typing.Dict[str, typing.Any]:
+        """Get a dict representation of this game."""
+        return {
+            'id': self.id,
+            'mode': self.mode,
+            'host': self.host.to_json() if self.host else None,
+            'away': self.away.to_json() if self.away else None,
+            'invited': self.invited.to_json() if self.invited else None,
+            'current_turn': self.current_turn.value,
+            'turn_number': int(self.turn_number),
+            'main_thinking_time': self.main_thinking_time.total_seconds(),
+            'fixed_extra_time': self.fixed_extra_time.total_seconds(),
+            'time_increment_per_turn': (
+                self.time_increment_per_turn.total_seconds()
+            ),
+            'home_time': (
+                self.home_time or self.main_thinking_time
+            ).total_seconds(),
+            'away_time': (
+                self.away_time or self.main_thinking_time
+            ).total_seconds(),
+            'home_offering_draw': self.home_offering_draw,
+            'away_offering_draw': self.away_offering_draw,
+            'winner': self.winner.value,
+            'conclusion_type': self.conclusion_type.value,
+            'opened_at': self.opened_at.timestamp(),
+            'started_at': (
+                self.started_at.timestamp() if self.started_at else None
+            ),
+            'last_turn': (
+                self.last_turn.timestamp() if self.last_turn else None
+            ),
+            'ended_at': self.ended_at.timestamp() if self.ended_at else None
+        }
+
 
 class Piece(BaseModel):
     """A model to represent a piece in a game."""
@@ -433,4 +471,4 @@ HostUser = User.alias()
 AwayUser = User.alias()
 InvitedUser = User.alias()
 
-db.create_tables([User, Game, Piece, GameState])
+db.create_tables([User, Session, Game, Piece, GameState])
