@@ -17,8 +17,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 import requests
 
 
-URL = 'http://127.0.0.1:5000'
-
 Json = typing.Dict[str, typing.Any]
 
 
@@ -94,6 +92,10 @@ class Side(enum.Enum):
 class Client:
     """A client connected to the server."""
 
+    def __init__(self, url: str):
+        """Initialise the client with the URL of the server."""
+        self.url = url
+
     def _post_payload(
             self, endpoint: str, payload: Json, method: str = 'POST',
             encrypted: bool = False) -> Json:
@@ -112,7 +114,7 @@ class Client:
             'POST': requests.post,
             'PATCH': requests.patch
         }[method]
-        response = method(URL + endpoint, data=data)
+        response = method(self.url + endpoint, data=data)
         return self._handle_response(response)
 
     def _handle_response(self, response: requests.Response) -> Json:
@@ -127,7 +129,7 @@ class Client:
     @functools.cached_property
     def _public_key(self) -> rsa.RSAPublicKey:
         """Get the server's public key."""
-        raw = requests.get(URL + '/rsa_key').content
+        raw = requests.get(self.url + '/rsa_key').content
         return serialization.load_pem_public_key(raw)
 
     def login(self, username: str, password: str) -> Session:
@@ -146,16 +148,16 @@ class Client:
         if not bool(username) ^ bool(id):
             raise TypeError('Exactly one of username or id should be passed.')
         if username:
-            resp = requests.get(URL + '/user/' + username)
+            resp = requests.get(self.url + '/user/' + username)
         else:
             resp = requests.get(
-                URL + '/accounts/account', params={'id': user_id}
+                self.url + '/accounts/account', params={'id': user_id}
             )
         return User(self, self._handle_response(resp))
 
     def get_game(self, game_id: int) -> Game:
         """Get a game by ID."""
-        resp = requests.get(URL + '/games/' + str(game_id))
+        resp = requests.get(self.url + '/games/' + str(game_id))
         return Game(self, self._handle_response(resp))
 
     def get_users(self, start_page: int = 0) -> Paginator:
@@ -172,7 +174,7 @@ class Client:
 
     def verify_email(self, username: str, token: str):
         """Verify an email address."""
-        resp = requests.get(URL + '/accounts/verify_email', params={
+        resp = requests.get(self.url + '/accounts/verify_email', params={
             'username': username, 'token': token
         })
         self._handle_response(resp)
@@ -198,7 +200,7 @@ class Session:
             'GET': requests.get,
             'DELETE': requests.delete
         }[method]
-        response = method(URL + endpoint, params=payload)
+        response = method(self.client.url + endpoint, params=payload)
         return self.client._handle_response(response)
 
     def _post_authenticated(
@@ -429,7 +431,9 @@ class Paginator:
     def _get_page(self):
         """Fetch the current page."""
         self._params['page'] = self.page_number
-        response = requests.get(URL + self._endpoint, params=self._params)
+        response = requests.get(
+            self.client.url + self._endpoint, params=self._params
+        )
         raw = self.client._handle_response(response)
         self.pages = raw['pages']
         self._page = []
