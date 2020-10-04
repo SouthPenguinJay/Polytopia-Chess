@@ -1,5 +1,6 @@
 """Run the server."""
 from .endpoints.helpers import app
+from .events.helpers import socketio
 
 
-app.run(debug=True)
+socketio.run(app)
