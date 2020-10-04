@@ -145,7 +145,7 @@ class Client:
 
     def get_user(self, username: str = None, user_id: int = None) -> User:
         """Get a user's account."""
-        if not bool(username) ^ bool(id):
+        if not bool(username) ^ bool(user_id):
             raise TypeError('Exactly one of username or id should be passed.')
         if username:
             resp = requests.get(self.url + '/user/' + username)
