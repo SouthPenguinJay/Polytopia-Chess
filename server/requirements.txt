@@ -3,4 +3,3 @@ flask
 peewee
 requests
 psycopg2-binary
-

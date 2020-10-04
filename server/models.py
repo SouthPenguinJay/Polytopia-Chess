@@ -209,10 +209,10 @@ class BaseModel(pw.Model):
     @classmethod
     def converter(cls, value: typing.Union[int, str]) -> pw.Model:
         """Convert a parameter to an instance of the model."""
-        field_name = getattr(cls.PolyChessMeta, 'primary_parameter_key', 'id')
+        field_name = getattr(cls.KasupelMeta, 'primary_parameter_key', 'id')
         field = getattr(cls, field_name)
         if isinstance(field, pw.AutoField):
-            base_converter = converters._int_converter
+            base_converter = converters.int_converter
         elif isinstance(field, pw.CharField):
             base_converter = lambda x: x    # noqa: E731
         else:
@@ -221,7 +221,7 @@ class BaseModel(pw.Model):
         try:
             return cls.get(field == model_id)
         except cls.DoesNotExist:
-            raise helpers.RequestError(cls.PolyChessMeta.not_found_error)
+            raise helpers.RequestError(cls.KasupelMeta.not_found_error)
 
 
 class User(BaseModel):
@@ -235,7 +235,7 @@ class User(BaseModel):
     avatar = pw.BlobField(null=True)
     created_at = pw.DateTimeField(default=datetime.datetime.now)
 
-    class PolyChessMeta:
+    class KasupelMeta:
         """Set the "not found" error code and use username as key."""
 
         not_found_error = 1001
@@ -365,6 +365,8 @@ class Game(BaseModel):
 
     home_offering_draw = pw.BooleanField(default=False)
     away_offering_draw = pw.BooleanField(default=False)
+    other_valid_draw_claim = EnumField(Conclusion, null=True)
+
     winner = EnumField(Winner, default=Winner.GAME_NOT_COMPLETE)
     conclusion_type = EnumField(
         Conclusion, default=Conclusion.GAME_NOT_COMPLETE
@@ -374,7 +376,10 @@ class Game(BaseModel):
     started_at = pw.DateTimeField(null=True)
     ended_at = pw.DateTimeField(null=True)
 
-    class PolyChessMeta:
+    host_socket_id = pw.CharField(null=True)
+    away_socket_id = pw.CharField(null=True)
+
+    class KasupelMeta:
         """Set the "not found" error code."""
 
         not_found_error = 2001

@@ -7,7 +7,7 @@ from discord.ext import commands
 
 import peewee
 
-import polychess
+import kasupel
 
 
 db_file = pathlib.Path(__file__).parent.parent.absolute() / 'db.sqlite'
@@ -38,13 +38,13 @@ class Session(BaseModel):
 
     @classmethod
     def create_from_session(
-            cls, session: polychess.Session, user_id: int) -> Session:
-        """Create from a polychess session object."""
+            cls, session: kasupel.Session, user_id: int) -> Session:
+        """Create from a kasupel session object."""
         return cls.create(id=session.id, token=session.token, user_id=user_id)
 
-    def get_session(self, client: polychess.Client) -> polychess.Session:
-        """Get a polychess session object from this instance."""
-        return polychess.Session(client, self.token, self.id)
+    def get_session(self, client: kasupel.Client) -> kasupel.Session:
+        """Get a kasupel session object from this instance."""
+        return kasupel.Session(client, self.token, self.id)
 
 
 db.create_tables([Session])

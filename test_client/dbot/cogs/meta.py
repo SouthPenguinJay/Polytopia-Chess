@@ -7,7 +7,7 @@ from ..tools.errors import on_command_error
 
 ABOUT = (
     'This bot was made by Artemis#9784. Its sole purpose is to implement the '
-    'Polychess API, mainly for testing purposes.'
+    'Kasupel API, mainly for testing purposes.'
 )
 
 

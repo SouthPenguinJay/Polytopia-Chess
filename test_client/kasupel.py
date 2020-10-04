@@ -288,9 +288,6 @@ class Session:
         """Get a list of ongoing games this user is in."""
         return self._get_games_paginator('ongoing', start_page)
 
-    # FIXME: Once sockets are implemented, the following three methods should
-    #        be CONNECT rather than GET.
-
     def find_game(
             self,
             main_thinking_time: datetime.timedelta,

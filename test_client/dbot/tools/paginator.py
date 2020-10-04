@@ -4,14 +4,14 @@ import typing
 import discord
 from discord.ext import commands
 
-import polychess
+import kasupel
 
 
 class Paginator:
     """A class to display paginated data."""
 
     def __init__(
-            self, ctx: commands.Context, response: polychess.Paginator,
+            self, ctx: commands.Context, response: kasupel.Paginator,
             fmt: typing.Callable, title: str):
         """Set up the paginator."""
         self.ctx = ctx

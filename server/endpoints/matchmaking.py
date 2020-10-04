@@ -1,27 +1,21 @@
 """Respond to and send socket API calls related to matchmaking."""
 import datetime
+import typing
 
 import peewee
 
 from .helpers import RequestError, endpoint
-from .. import models
+from .. import events, models
 
-
-# TODO: Implement sockets.
-_start_socket_session = lambda x, y: None    # noqa: E731
-_end_socket_session = lambda x, y: None      # noqa: E731
-
-
-# FIXME: Once sockets are implemented, the following three methods should be
-#        CONNECT rather than GET.
 
 @models.db.atomic()
-@endpoint('/games/find', method='GET', require_verified_email=True)
+@endpoint('/games/find', method='POST', require_verified_email=True)
 def find_game(
         user: models.User,
         main_thinking_time: datetime.timedelta,
         fixed_extra_time: datetime.timedelta,
-        time_increment_per_turn: datetime.timedelta, mode: int):
+        time_increment_per_turn: datetime.timedelta,
+        mode: int) -> typing.Dict[str, int]:
     """Find a game matching parameters, or create one if not found."""
     try:
         game = models.Game.get(
@@ -40,18 +34,21 @@ def find_game(
         )
     else:
         game.start_game(user)
-        _start_socket_session(game.host, game)
-    _start_socket_session(user, game)
+        events.has_started(game)
+    return {
+        'game_id': game.id
+    }
 
 
 @models.db.atomic()
-@endpoint('/games/send_invitation', method='GET', require_verified_email=True)
+@endpoint('/games/send_invitation', method='POST', require_verified_email=True)
 def send_invitation(
         user: models.User,
         invitee: models.User,
         main_thinking_time: datetime.timedelta,
         fixed_extra_time: datetime.timedelta,
-        time_increment_per_turn: datetime.timedelta, mode: int):
+        time_increment_per_turn: datetime.timedelta,
+        mode: int) -> typing.Dict[str, int]:
     """Create a game which only a specific person may join."""
     if user == invitee:
         raise RequestError(2121)
@@ -61,17 +58,19 @@ def send_invitation(
         fixed_extra_time=fixed_extra_time,
         time_increment_per_turn=time_increment_per_turn
     )
-    _start_socket_session(user, game)
+    return {
+        'game_id': game.id
+    }
 
 
 @models.db.atomic()
-@endpoint('/games/invites/<game>', method='GET', require_verified_email=True)
+@endpoint('/games/invites/<game>', method='POST', require_verified_email=True)
 def accept_invitation(user: models.User, game: models.Game):
     """Accept a game you have been invited to."""
     if game.invited != user:
         raise RequestError(2111)
     game.start_game(user)
-    _start_socket_session(user, game)
+    events.has_started(game)
 
 
 @models.db.atomic()
@@ -80,5 +79,7 @@ def decline_invitation(user: models.User, game: models.Game):
     """Decline a game you have been invited to."""
     if game.invited != user:
         raise RequestError(2111)
-    _end_socket_session(game.host, game)
+    events.disconnect_game(
+        game.host_socket_id, reason=events.DisconnectReason.INVITE_DECLINED
+    )
     game.delete_instance()

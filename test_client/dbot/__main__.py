@@ -5,7 +5,7 @@ import pathlib
 
 from discord.ext import commands
 
-import polychess
+import kasupel
 
 from .cogs import COGS
 from .tools.helpcmd import Help
@@ -18,7 +18,7 @@ with open(config_file) as f:
     config = json.load(f)
 
 bot = commands.Bot(command_prefix=config['prefix'], help_command=Help())
-bot.client = polychess.Client(config['api_url'])
+bot.client = kasupel.Client(config['api_url'])
 for cog in COGS:
     bot.add_cog(cog(bot))
 
