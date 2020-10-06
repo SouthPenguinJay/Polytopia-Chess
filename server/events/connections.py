@@ -78,6 +78,6 @@ def connect():
             game.away == session.user
             and game.current_turn == models.Side.AWAY
         )
-    )
+    ) and game.started_at
     if is_currently_turn:
         helpers.send_user('allowed_moves', games.get_allowed_moves(game))
