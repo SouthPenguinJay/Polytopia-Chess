@@ -41,7 +41,7 @@
     "2300": "Bad game event recieved.",
       "2310": "Game event not allowed.",
         "2311": "Cannot request game state for a game that has not started.",
-        "2312": "Cannot request allowed moves when it is not your turn.",
+        "2312": "You may not do this when it is not your turn.",
         "2313": "Invalid move.",
       "2320": "Disallowed reason to claim a draw.",
         "2321": "Not a reason to claim a draw.",

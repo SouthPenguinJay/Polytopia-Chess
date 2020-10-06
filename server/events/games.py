@@ -106,6 +106,8 @@ def allowed_moves():
 def move(move_data: typing.Dict[str, typing.Any]):
     """Handle a move being made."""
     game = flask.request.context.game
+    if flask.request.context.side != game.current_turn:
+        raise helpers.RequestError(2312)
     if not game.game_mode.make_move(**move_data):
         raise helpers.RequestError(2313)
     game.turn_number += 1

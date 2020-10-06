@@ -6,7 +6,7 @@ import flask
 
 import flask_socketio as sockets
 
-from . import helpers
+from . import games, helpers
 from .. import models
 from ..endpoints.helpers import validate_session_key
 
@@ -70,3 +70,14 @@ def connect():
         # There is an existing connection for the same user.
         disconnect(old_socket, DisconnectReason.NEW_CONNECTION)
     sockets.join_room(str(game.id))
+    if game.started_at:
+        helpers.send_user('game_state', games.get_game_state(game))
+    is_currently_turn = (
+        (game.home == session.user and game.current_turn == models.Side.HOME)
+        or (
+            game.away == session.user
+            and game.current_turn == models.Side.AWAY
+        )
+    )
+    if is_currently_turn:
+        helpers.send_user('allowed_moves', games.get_allowed_moves(game))
