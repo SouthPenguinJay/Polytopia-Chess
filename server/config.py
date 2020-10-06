@@ -13,6 +13,9 @@ with open(_config_file) as f:
     config = json.load(f)
 
 
+ELO_K_FACTOR = config.get('elo_k_factor', 32)
+
+
 DB_NAME = config['db_name']
 DB_USER = config.get('db_user', DB_NAME)
 DB_PASSWORD = config.get('db_password', '')

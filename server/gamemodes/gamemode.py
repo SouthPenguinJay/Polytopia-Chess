@@ -17,10 +17,8 @@ class GameMode:
         """Put the pieces on the board."""
         raise NotImplementedError
 
-    def validate_move(
-            self, start_rank: int, start_file: int, end_rank: int,
-            end_file: int) -> bool:
-        """Validate a move."""
+    def make_move(self, **move_data: typing.Dict[str, typing.Any]) -> bool:
+        """Validate and apply a move."""
         raise NotImplementedError
 
     def possible_moves(self, side: models.Side) -> typing.Iterator[

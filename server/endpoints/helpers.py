@@ -96,12 +96,37 @@ def _decrypt_request(raw: bytes) -> typing.Dict[str, typing.Any]:
         raise RequestError(3113)
 
 
+def validate_session_key(
+        session_id: typing.Union[int, str],
+        session_token: str) -> typing.Optional[models.Session]:
+    """Get a session for a session ID and token."""
+    if isinstance(session_id, str):
+        try:
+            session_id = int(session_id)
+        except ValueError:
+            raise RequestError(1309)
+    try:
+        session_token = base64.b64decode(session_token)
+    except ValueError:
+        raise RequestError(3112)
+    try:
+        session = models.Session.get_by_id(session_id)
+    except peewee.DoesNotExist:
+        raise RequestError(1304)
+    if session_token != bytes(session.token):
+        raise RequestError(1305)
+    if session.expired:
+        session.delete_instance()
+        raise RequestError(1306)
+    return session
+
+
 def _process_request(
         request: flask.Request, method: str,
         encrypt_request: bool,
         require_verified_email: bool) -> typing.Dict[str, typing.Any]:
     """Handle authentication and encryption."""
-    if method in ('GET', 'CONNECT', 'DELETE'):
+    if method in ('GET', 'DELETE'):
         data = dict(request.args)
     elif method in ('POST', 'PATCH'):
         if encrypt_request:
@@ -119,19 +144,7 @@ def _process_request(
     if bool(session_id) ^ bool(session_token):
         raise RequestError(1303)
     if session_id and session_token:
-        try:
-            session_token = base64.b64decode(session_token)
-        except ValueError:
-            raise RequestError(3112)
-        try:
-            session = models.Session.get_by_id(session_id)
-        except peewee.DoesNotExist:
-            raise RequestError(1304)
-        if session_token != bytes(session.token):
-            raise RequestError(1305)
-        if session.expired:
-            session.delete_instance()
-            raise RequestError(1306)
+        session = validate_session_key(session_id, session_token)
         request.session = session
         user = session.user
         if require_verified_email and not user.email_verified:
@@ -149,7 +162,7 @@ def endpoint(
         require_verified_email: bool = False) -> typing.Callable:
     """Create a wrapper for an endpoint."""
     method = method.upper()
-    if method not in ('GET', 'DELETE', 'CONNECT', 'POST', 'PATCH'):
+    if method not in ('GET', 'DELETE', 'POST', 'PATCH'):
         raise RuntimeError(f'Unhandled method "{method}".')
     if encrypt_request and method not in ('POST', 'PATCH'):
         raise RuntimeError('Cannot encrypt bodyless request.')

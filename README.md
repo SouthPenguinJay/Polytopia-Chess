@@ -1,4 +1,5 @@
-# Polytopia-Chess
+# Kasupel
+
 A chess game with custom pieces and boards. Join the discord https://discord.gg/55NwUbD.
 
 ## Setting up the server
@@ -25,12 +26,12 @@ We will add more content to it as we set up.
 ### 4: Set up Postgres
 
   1. Install Postgres, if you haven't already
-  2. Create a new Postgres role, eg. `polychess`.
-  3. Create a database for the role, eg. `polychess`.
+  2. Create a new Postgres role, eg. `kasupel`.
+  3. Create a database for the role, eg. `kasupel`.
   4. Add to following lines to the config file (between the `{` and `}`):
      ```
-         "db_name": "polychess",
-         "db_user": "polychess",
+         "db_name": "kasupel",
+         "db_user": "kasupel",
          "db_password": "******",
      ```
      Of course, replace the values with those chosen in the above steps.

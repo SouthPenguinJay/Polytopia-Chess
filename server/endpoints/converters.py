@@ -1,6 +1,7 @@
 """Detect and convert the parameters passed to endpoints."""
 import base64
 import datetime
+import enum
 import functools
 import inspect
 import typing
@@ -10,7 +11,7 @@ import peewee
 from . import helpers
 
 
-def _int_converter(value: typing.Union[str, int]) -> int:
+def int_converter(value: typing.Union[str, int]) -> int:
     """Convert an integer parameter."""
     try:
         return int(value)
@@ -22,11 +23,21 @@ def _bytes_converter(value: typing.Union[str, bytes]) -> bytes:
     """Convert a bytes parameter that may have been passed as base64."""
     if isinstance(value, bytes):
         return value
-    elif isinstance(value, str):
-        try:
-            return base64.b64decode(value)
-        except ValueError:
-            raise helpers.RequestError(3112)
+    try:
+        return base64.b64decode(str(value))
+    except ValueError:
+        raise helpers.RequestError(3112)
+
+
+def _dict_converter(
+        value: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+    """Convert a dict (JSON) parameter.
+
+    Does no actual conversion, only validation.
+    """
+    if not isinstance(value, dict):
+        raise helpers.RequestError(3113)
+    return value
 
 
 def _timedelta_converter(value: typing.Union[str, int]) -> datetime.timedelta:
@@ -34,8 +45,20 @@ def _timedelta_converter(value: typing.Union[str, int]) -> datetime.timedelta:
 
     This should be passed as an integer representing seconds.
     """
-    value = _int_converter(value)
+    value = int_converter(value)
     return datetime.timedelta(seconds=value)
+
+
+def _make_enum_converter(enum_class: enum.Enum) -> typing.Callable:
+    """Create a converter for an enum class."""
+    def enum_converter(value: typing.Union[str, int]) -> enum.Enum:
+        """Convert a number to the relevant value in an enum."""
+        value = int_converter(value)
+        try:
+            return enum_class(value)
+        except ValueError:
+            raise helpers.RequestError(3114)
+    return enum_converter
 
 
 def _plain_converter(converter: typing.Callable) -> typing.Callable:
@@ -77,13 +100,17 @@ def get_converters(
         if type_hint == str:
             converter = str
         elif type_hint == int:
-            converter = _int_converter
+            converter = int_converter
         elif type_hint == bytes:
             converter = _bytes_converter
         elif type_hint == datetime.timedelta:
             converter = _timedelta_converter
         elif issubclass(type_hint, peewee.Model):
             converter = type_hint.converter
+        elif issubclass(type_hint, enum.Enum):
+            converter = _make_enum_converter(type_hint)
+        elif type_hint == typing.Dict:
+            converter = _dict_converter
         else:
             raise RuntimeError(f'Converter needed for argument {name}.')
         if details.default != inspect._empty:

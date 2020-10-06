@@ -4,7 +4,7 @@ import datetime
 import discord
 from discord.ext import commands
 
-import polychess
+import kasupel
 
 from ..tools import models
 from ..tools.checks import authenticated
@@ -57,28 +57,28 @@ def parse_td(raw: str) -> datetime.timedelta:
     return datetime.timedelta(seconds=seconds)
 
 
-def parse_gamemode(raw: str) -> polychess.Gamemode:
+def parse_gamemode(raw: str) -> kasupel.Gamemode:
     """Parse a gamemode."""
-    for gamemode in polychess.Gamemode:
+    for gamemode in kasupel.Gamemode:
         if gamemode.name.lower() == raw.lower():
             return gamemode
     # FIXME
 
 
-def format_completed_game(_n: int, item: polychess.Game) -> str:
+def format_completed_game(_n: int, item: kasupel.Game) -> str:
     """Format a game that has ended to display it."""
     mode = item.mode.name.title()
     home = item.host.username
     away = item.away.username
     conclusion = {
-        polychess.Winner.HOME: f'{home} won',
-        polychess.Winner.AWAY: f'{away} won',
-        polychess.Winner.DRAW: 'draw'
+        kasupel.Winner.HOME: f'{home} won',
+        kasupel.Winner.AWAY: f'{away} won',
+        kasupel.Winner.DRAW: 'draw'
     }[item.winner]
     return f'({item.id}) {mode} - {home} vs {away}, {conclusion}'
 
 
-def format_open_game(_n: int, item: polychess.Game) -> str:
+def format_open_game(_n: int, item: kasupel.Game) -> str:
     """Format a game that is open to display it."""
     mode = item.mode.name.title()
     timings = (
@@ -94,7 +94,7 @@ def format_open_game(_n: int, item: polychess.Game) -> str:
     return display
 
 
-def format_ongoing_game(_n: int, item: polychess.Game) -> str:
+def format_ongoing_game(_n: int, item: kasupel.Game) -> str:
     """Format a game that is in progress to display it."""
     mode = item.mode.name.title()
     home = item.host.username

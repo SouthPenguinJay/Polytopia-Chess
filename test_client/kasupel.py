@@ -1,4 +1,4 @@
-"""Test the server with a terminal client."""
+"""A Python wrapper for the API."""
 from __future__ import annotations
 
 import base64
@@ -15,6 +15,8 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 import requests
+
+import socketio
 
 
 Json = typing.Dict[str, typing.Any]
@@ -89,6 +91,17 @@ class Side(enum.Enum):
     AWAY = enum.auto()
 
 
+class PieceType(enum.Enum):
+    """An enum for a chess piece type."""
+
+    PAWN = enum.auto()
+    ROOK = enum.auto()
+    KNIGHT = enum.auto()
+    BISHOP = enum.auto()
+    QUEEN = enum.auto()
+    KING = enum.auto()
+
+
 class Client:
     """A client connected to the server."""
 
@@ -145,7 +158,7 @@ class Client:
 
     def get_user(self, username: str = None, user_id: int = None) -> User:
         """Get a user's account."""
-        if not bool(username) ^ bool(user_id):
+        if not bool(username) ^ bool(id):
             raise TypeError('Exactly one of username or id should be passed.')
         if username:
             resp = requests.get(self.url + '/user/' + username)
@@ -288,16 +301,14 @@ class Session:
         """Get a list of ongoing games this user is in."""
         return self._get_games_paginator('ongoing', start_page)
 
-    # FIXME: Once sockets are implemented, the following three methods should
-    #        be CONNECT rather than GET.
-
     def find_game(
             self,
             main_thinking_time: datetime.timedelta,
             fixed_extra_time: datetime.timedelta,
-            time_increment_per_turn: datetime.timedelta, mode: Gamemode):
+            time_increment_per_turn: datetime.timedelta,
+            mode: Gamemode) -> Game:
         """Look for or create a game."""
-        self._get_authenticated(
+        response = self._post_authenticated(
             '/games/find', {
                 'main_thinking_time': dump_timedelta(main_thinking_time),
                 'fixed_extra_time': dump_timedelta(fixed_extra_time),
@@ -307,14 +318,16 @@ class Session:
                 'mode': mode.value
             }
         )
+        return self.client.get_game(response['game_id'])
 
     def send_invitation(
             self, other: User,
             main_thinking_time: datetime.timedelta,
             fixed_extra_time: datetime.timedelta,
-            time_increment_per_turn: datetime.timedelta, mode: Gamemode):
+            time_increment_per_turn: datetime.timedelta,
+            mode: Gamemode) -> Game:
         """Send an invitation to another user."""
-        self._get_authenticated(
+        response = self._post_authenticated(
             '/games/send_invitation', {
                 'invitee': other.username,
                 'main_thinking_time': dump_timedelta(main_thinking_time),
@@ -325,16 +338,72 @@ class Session:
                 'mode': mode.value
             }
         )
+        return self.client.get_game(response['game_id'])
 
     def accept_inivitation(self, invitation: Game):
         """Accept a game you have been invited to."""
-        self._get_authenticated('/games/invites/' + str(invitation.id))
+        self._post_authenticated('/games/invites/' + str(invitation.id), {})
 
     def decline_invitation(self, invitation: Game):
         """Decline a game you have been invited to."""
         self._get_authenticated(
             '/games/invites/' + str(invitation.id), method='DELETE'
         )
+
+    def connect_to_game(self, game: Game) -> GameConnection:
+        """Connect to a websocket for a game."""
+        return GameConnection(self, game)
+
+
+class GameConnection(socketio.Client):
+    """A websocket connection for a game."""
+
+    def __init__(self, session: Session, game: Game):
+        """Connect to the game."""
+        super().__init__()
+        self.session = session
+        self.client = session.client
+        self.game = game
+        session_token = base64.b64encode(self.session.token)
+        headers = {
+            'Game-ID': game.id,
+            'Authorization': f'SessionKey {self.session.id}|{session_token}'
+        }
+        self.connect(self.client.url, headers=headers)
+
+    def request_game_state(self):
+        """Request the current state of the game."""
+        self.emit('game_state')
+
+    def request_allowed_moves(self):
+        """Request the moves we are allowed to make."""
+        self.emit('allowed_moves')
+
+    def make_move(
+            self, start_rank: int, start_file: int, end_rank: int,
+            end_file: int, promotion: typing.Optional[PieceType] = None):
+        """Make a move."""
+        self.emit('move', {
+            'start_rank': start_rank,
+            'start_file': start_file,
+            'end_rank': end_rank,
+            'end_file': end_file,
+            'promotion': (promotion.value if promotion else None)
+        })
+
+    def offer_draw(self):
+        """Offer our opponent a draw."""
+        self.emit('offer_draw')
+
+    def claim_draw(self, reason: Conclusion):
+        """Claim a draw."""
+        self.emit('claim_draw', reason.value)
+
+    def resign(self):
+        """Resign from the game."""
+        self.emit('resign')
+
+    # TODO: Accept incoming events.
 
 
 class User:
@@ -454,7 +523,7 @@ class Paginator:
         return self
 
     def __next__(self) -> User:
-        """Get the next user."""
+        """Get the next item."""
         if self._index < len(self._page):
             value = self._page[self._index]
             self._index += 1
@@ -468,5 +537,5 @@ class Paginator:
             raise StopIteration
 
     def __len__(self) -> int:
-        """Calculate an aproximate for the number of users."""
+        """Calculate an aproximate for the number of items."""
         return self.pages * self.per_page

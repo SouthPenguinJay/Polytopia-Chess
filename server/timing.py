@@ -47,3 +47,6 @@ class Timer:
             + current_timer
             + self.game.fixed_extra_time
         )
+
+
+# TODO: Actually use timing.

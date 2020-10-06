@@ -5,7 +5,7 @@ import traceback
 import discord
 from discord.ext.commands import CommandNotFound, Context
 
-from polychess import RequestError
+from kasupel import RequestError
 
 
 async def on_command_error(ctx: Context, error: Exception):
