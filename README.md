@@ -1,3 +1,5 @@
+IMPORTANT: Work on this project has moved to a private repository. While we are a fan of open source code, it is generally not the most profitable business model.
+
 # Kasupel
 
 A chess game with custom pieces and boards. Join the discord https://discord.gg/55NwUbD.
